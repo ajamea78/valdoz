@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +23,15 @@ from valdoz.approval import (
     NonInteractiveApprovalError,
     approve_phase,
 )
+from valdoz.logs import (
+    add_decision,
+    add_research,
+    check_research_staleness,
+    load_decisions,
+    load_research,
+    pre_log_research_intent,
+    sanitize_and_wrap_content,
+)
 from valdoz.phases import (
     PHASE_NAMES,
     PhaseTransitionError,
@@ -32,6 +42,7 @@ from valdoz.phases import (
     get_side_effect_info,
     reopen_phase,
 )
+from valdoz.repair import repair_state
 from valdoz.session import (
     SessionLockError,
     acquire_session,
@@ -58,10 +69,16 @@ app = typer.Typer(
 phase_app = typer.Typer(name="phase", help="Phase state machine commands", no_args_is_help=True)
 session_app = typer.Typer(name="session", help="Multi-role session locks", no_args_is_help=True)
 project_app = typer.Typer(name="project", help="Project lifecycle commands", no_args_is_help=True)
+decision_app = typer.Typer(name="decision", help="Decision log commands", no_args_is_help=True)
+research_app = typer.Typer(name="research", help="Research subsystem commands", no_args_is_help=True)
+state_app = typer.Typer(name="state", help="State inspection and repair", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
 app.add_typer(project_app)
+app.add_typer(decision_app)
+app.add_typer(research_app)
+app.add_typer(state_app)
 
 
 def find_project_root() -> Path:
@@ -236,7 +253,6 @@ def phase_status():
     console.print(table)
     console.print(f"\nState write-protection: [bold {'green' if protected else 'yellow'}]{'LOCKED (read-only)' if protected else 'UNLOCKED'}[/]")
 
-    # Show deliverables for current phase
     deliverables = get_required_deliverables(curr_num)
     console.print(f"\n[bold]Required Deliverables for Phase {curr_num}:[/bold]")
     if deliverables:
@@ -246,7 +262,6 @@ def phase_status():
     else:
         console.print("  [dim]No fixed deliverables specified (dynamic).[/dim]")
 
-    # Show whitelist
     whitelist = get_phase_whitelist(curr_num)
     console.print(f"\n[bold]Command Whitelist for Phase {curr_num}:[/bold]")
     console.print("  " + ", ".join(f"`{cmd}`" for cmd in whitelist))
@@ -269,7 +284,7 @@ def phase_next():
 def phase_approve(
     phase: Optional[int] = typer.Option(None, "--phase", "-p", help="Phase number to approve"),
 ):
-    """Interactively approves a phase deliverables (Human-Only, Interactive TTY)."""
+    """Interactively approves phase deliverables (Human-Only, Interactive TTY)."""
     root = find_project_root()
     try:
         state = load_state(root)
@@ -341,25 +356,144 @@ def phase_reopen(
         raise typer.Exit(1)
 
 
+# ── Decision Commands ───────────────────────────────────────────────────────
+@decision_app.command("add")
+def decision_add(
+    question: str = typer.Option(..., "--question", "-q", help="The architectural or design question"),
+    choice: str = typer.Option(..., "--choice", "-c", help="The chosen option"),
+    rationale: str = typer.Option(..., "--rationale", "-r", help="Reasoning and trade-offs"),
+    phase: Optional[int] = typer.Option(None, "--phase", "-p", help="Phase number"),
+):
+    """Appends an architectural decision to decisions.jsonl and regenerates decisions.md."""
+    root = find_project_root()
+    entry = add_decision(
+        project_root=root,
+        question=question,
+        choice=choice,
+        rationale=rationale,
+        phase=phase,
+    )
+    console.print(f"[bold green]Recorded {entry.id}:[/bold green] '{entry.choice}' in Phase {entry.phase}")
+    console.print(f"Updated: [cyan]{root / '.valdoz' / 'decisions.md'}[/cyan]")
+
+
+# ── Research Commands ───────────────────────────────────────────────────────
+@research_app.command("log")
+def research_log(
+    url: str = typer.Option(..., "--url", "-u", help="URL about to be fetched"),
+    claim: str = typer.Option(..., "--claim", "-c", help="Expected claim or finding topic"),
+    phase: Optional[int] = typer.Option(None, "--phase", "-p", help="Phase number"),
+):
+    """Pre-logs fetch intent before accessing external web content (Gap 4 defense)."""
+    root = find_project_root()
+    entry = pre_log_research_intent(root, url=url, claim=claim, phase=phase)
+    console.print(f"[bold green]Pre-logged intent {entry.id}:[/bold green] '{entry.url}' (Pending Fetch)")
+
+
+@research_app.command("fetch")
+def research_fetch(
+    url: str = typer.Argument(..., help="URL to safely fetch and sanitize"),
+):
+    """Safely fetches external content and wraps it with untrusted boundary delimiters."""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "ValdoZ-SanitizedFetcher/3.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            raw_text = response.read().decode("utf-8", errors="replace")
+        wrapped = sanitize_and_wrap_content(raw_text, source_url=url)
+        console.print(wrapped)
+    except Exception as e:
+        console.print(f"[bold red]Fetch Failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+@research_app.command("add")
+def research_add_cmd(
+    url: str = typer.Option(..., "--url", "-u", help="Source URL"),
+    claim: str = typer.Option(..., "--claim", "-c", help="Verified finding or claim"),
+    source_type: str = typer.Option("official_docs", "--source-type", "-s", help="official_docs, repository, blog, spec"),
+    confidence: str = typer.Option("high", "--confidence", help="high, medium, low"),
+    valid_days: int = typer.Option(90, "--valid-days", "-d", help="Validity period before warning"),
+    phase: Optional[int] = typer.Option(None, "--phase", "-p", help="Phase number"),
+):
+    """Appends verified research finding to research.jsonl and regenerates research.md."""
+    root = find_project_root()
+    entry = add_research(
+        project_root=root,
+        url=url,
+        claim=claim,
+        source_type=source_type,
+        confidence=confidence,
+        valid_for_days=valid_days,
+        phase=phase,
+    )
+    console.print(f"[bold green]Logged finding {entry.id}:[/bold green] '{entry.claim[:60]}...'")
+    console.print(f"Updated: [cyan]{root / '.valdoz' / 'research.md'}[/cyan]")
+
+
+# ── State Commands ──────────────────────────────────────────────────────────
+@state_app.command("repair")
+def state_repair_cmd():
+    """Reconstructs state.json from git history and existing deliverable files."""
+    root = find_project_root()
+    console.print("[yellow]Initiating state reconstruction from git history and repository deliverables...[/yellow]")
+    try:
+        reconstructed, logs = repair_state(root)
+        for msg in logs:
+            console.print(f"  • {msg}")
+        console.print(f"[bold green]State repaired successfully![/bold green] Current Phase: {reconstructed.current_phase} ({PHASE_NAMES[reconstructed.current_phase]})")
+    except Exception as e:
+        console.print(f"[bold red]State repair failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
 # ── Doctor Command ──────────────────────────────────────────────────────────
 @app.command("doctor")
 def doctor():
-    """Runs health check on ValdoZ configuration and environment."""
+    """Runs health check on ValdoZ configuration, environment, and Python drift."""
     root = find_project_root()
     state_file = get_state_path(root)
 
     console.print(f"[bold cyan]ValdoZ Doctor v{__version__}[/bold cyan]")
     console.print(f"Project root: {root}")
-    console.print(f"Python interpreter: {sys.executable} (v{sys.version.split()[0]})")
+
+    # Check Python version drift
+    py_ver = sys.version.split()[0]
+    console.print(f"Python interpreter: {sys.executable} (v{py_ver})")
+    installed_py_file = root / ".valdoz" / "python_version.txt"
+    if installed_py_file.exists():
+        installed_py = installed_py_file.read_text().strip()
+        if installed_py != py_ver:
+            console.print(
+                f"  [bold yellow]! Python Version Drift Detected:[/bold yellow] "
+                f"Project initialized with Python {installed_py}, currently running on {py_ver}."
+            )
+        else:
+            console.print("  [green]✓[/green] Python version matches project initialization.")
+    else:
+        # Record current version
+        if (root / ".valdoz").exists():
+            installed_py_file.write_text(py_ver, encoding="utf-8")
 
     # Check state file
     if state_file.exists():
         console.print("  [green]✓[/green] state.json exists")
         protected = is_write_protected(state_file)
-        console.print(f"  [{'green' if protected else 'yellow'}]{'✓' if protected else '!'}[/] Write protection: {'Active' if protected else 'Not active'}")
+        console.print(f"  [{'green' if protected else 'yellow'}]{'✓' if protected else '!'}[/] Write protection: {'Active (read-only)' if protected else 'Not active'}")
     else:
         console.print("  [yellow]![/yellow] state.json not found (Run 'valdoz project init')")
 
     # Check sessions
     active = get_active_sessions(root)
     console.print(f"  [green]✓[/green] Active agent sessions: {len(active)}")
+
+    # Check staleness
+    stale = check_research_staleness(root)
+    if stale:
+        console.print(f"  [bold yellow]! Stale research items detected: {len(stale)}[/bold yellow]")
+        for s in stale:
+            console.print(f"    - {s['id']}: '{s['claim']}' is {s['age_days']} days old (limit: {s['valid_for_days']}d)")
+    else:
+        console.print("  [green]✓[/green] Research citations up to date.")
