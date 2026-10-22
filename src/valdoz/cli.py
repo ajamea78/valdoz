@@ -783,6 +783,14 @@ def doctor():
     active = get_active_sessions(root)
     console.print(f"  [green]✓[/green] Active agent sessions: {len(active)}")
 
+    # Check Antigravity SDK
+    from valdoz.sdk_bridge import is_sdk_available, get_sdk_version
+    if is_sdk_available():
+        sdk_ver = get_sdk_version() or "installed"
+        console.print(f"  [green]✓[/green] Google Antigravity SDK: v{sdk_ver} active")
+    else:
+        console.print("  [dim]• Google Antigravity SDK: Not installed (optional, pip install google-antigravity)[/dim]")
+
     # Check staleness
     stale = check_research_staleness(root)
     if stale:
@@ -791,3 +799,4 @@ def doctor():
             console.print(f"    - {s['id']}: '{s['claim']}' is {s['age_days']} days old (limit: {s['valid_for_days']}d)")
     else:
         console.print("  [green]✓[/green] Research citations up to date.")
+

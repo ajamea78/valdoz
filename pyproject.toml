@@ -26,6 +26,9 @@ dev = [
     "pillow>=10.0.0",
     "numpy>=1.26.0",
 ]
+sdk = [
+    "google-antigravity>=0.1.22",
+]
 
 [project.scripts]
 valdoz = "valdoz.cli:app"
