@@ -98,3 +98,22 @@ def test_cli_doctor_and_repair(run_in_tmp: Path):
     res_rep = runner.invoke(app, ["state", "repair"])
     assert res_rep.exit_code == 0
     assert "State repaired successfully" in res_rep.output
+
+
+def test_cli_sync_runtimes(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "sync-cli-test"])
+
+    # Dry run preview
+    res_dry = runner.invoke(app, ["sync-runtimes", "--dry-run"])
+    assert res_dry.exit_code == 0
+    assert "Synchronizing Antigravity runtime files (Dry Run)" in res_dry.output
+    assert not (run_in_tmp / "AGENTS.md").exists()
+
+    # Actual sync
+    res_sync = runner.invoke(app, ["sync-runtimes"])
+    assert res_sync.exit_code == 0
+    assert "Successfully synchronized" in res_sync.output
+    assert (run_in_tmp / "AGENTS.md").exists()
+    assert (run_in_tmp / "GEMINI.md").exists()
+    assert (run_in_tmp / ".agent" / "skills" / "valdoz-phase-1-intake" / "SKILL.md").exists()
+

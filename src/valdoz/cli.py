@@ -449,6 +449,36 @@ def state_repair_cmd():
         raise typer.Exit(1)
 
 
+# ── Sync Runtimes Command ───────────────────────────────────────────────────
+@app.command("sync-runtimes")
+def sync_runtimes_cmd(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview generated files without writing"),
+):
+    """Generates Antigravity rules, playbooks, and managed blocks with 12,000 char cap check."""
+    root = find_project_root()
+    from valdoz.sync import sync_all_runtimes, CharLimitExceededError
+
+    console.print(f"[bold cyan]Synchronizing Antigravity runtime files{' (Dry Run)' if dry_run else ''}...[/bold cyan]")
+    try:
+        results = sync_all_runtimes(root, dry_run=dry_run)
+        table = Table(title="Generated Runtime Customizations")
+        table.add_column("File Path", style="cyan")
+        table.add_column("Size (chars)", justify="right")
+        table.add_column("Status", style="green")
+
+        for rel_path, content in sorted(results.items()):
+            table.add_row(rel_path, f"{len(content):,}", "OK (within 12k cap)")
+
+        console.print(table)
+        console.print(f"[bold green]Successfully synchronized {len(results)} runtime configuration files.[/bold green]")
+    except CharLimitExceededError as e:
+        console.print(f"[bold red]Size Limit Exceeded:[/bold red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Sync Failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
 # ── Doctor Command ──────────────────────────────────────────────────────────
 @app.command("doctor")
 def doctor():
