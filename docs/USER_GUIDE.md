@@ -6,12 +6,12 @@
 
 ## Table of Contents
 1. [What is ValdoZ? (The 30-Second Mental Model)](#1-what-is-valdoz-the-30-second-mental-model)
-2. [Quick Setup (2-Minute Onboarding)](#2-quick-setup-2-minute-onboarding)
+2. [Quick Setup & Intelligent Project Initialization](#2-quick-setup--intelligent-project-initialization)
 3. [The Core Concept: Builder & Scribe Roles](#3-the-core-concept-builder--scribe-roles)
 4. [The 10 Project Phases (Cheat Sheet)](#4-the-10-project-phases-cheat-sheet)
 5. [The Daily Workflow (Step-by-Step)](#5-the-daily-workflow-step-by-step)
 6. [Phase 6: Mastering Build Slices](#6-phase-6-mastering-build-slices)
-7. [Universal Hygiene & Auditing](#7-universal-hygiene--auditing)
+7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene--automated-remediation)
 8. [Stack Packs, Ecosystem Plugins & SDK Agents](#8-stack-packs-ecosystem-plugins--sdk-agents)
 9. [Emergency Recovery & Troubleshooting](#9-emergency-recovery--troubleshooting)
 10. [Complete CLI Command Reference](#10-complete-cli-command-reference)
@@ -34,7 +34,7 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 
 ---
 
-## 2. Quick Setup (2-Minute Onboarding)
+## 2. Quick Setup & Intelligent Project Initialization
 
 ### Installation
 ValdoZ is installed via `uv tool`:
@@ -64,21 +64,45 @@ valdoz --version
 # Output: ValdoZ Protocol version 3.0.0
 ```
 
-### Initializing a Project
-Navigate to your project repository:
+### Intelligent Project Initialization (`valdoz project init`)
+ValdoZ is not a rigid one-size-fits-all checklist. It features an **Intelligent Project Scanner** that inspects your repository when initialized, detects its maturity archetype, and automatically routes you to the right starting phase:
+
 ```bash
 cd /path/to/your-project
 
-# Initialize ValdoZ (English deliverables)
+# Run intelligent initialization
 valdoz project init
-
-# Or for Arabic client-facing deliverables:
-valdoz project init --lang ar
 ```
 
-This creates:
-- `.valdoz/state.json`: The write-protected state machine.
-- `docs/`: Deliverable templates (`01-intake.md` through `09-handover.md`).
+#### How the Scanner Categorizes Projects:
+1. **🌱 Greenfield (Brand New Projects)**:
+   - *Signals*: Empty or minimal directory, no prior source files or manifests.
+   - *Action*: Starts cleanly at **Phase 0 (Init)**.
+
+2. **🏗️ Brownfield (Active In-Development Projects)**:
+   - *Signals*: Existing source files (`src/`), tests (`pytest`, `jest`), manifests (`package.json`, `pyproject.toml`), and lockfiles.
+   - *Action*: Detects that setup, architecture, and stack decisions are already satisfied. Pre-approves earlier phases as `approved (by: auto-scanner)` and places the project directly into **Phase 6 (Build Slices)** or **Phase 7 (Verify)**.
+
+3. **🚀 Production (Live Deployed Systems)**:
+   - *Signals*: Mature git history (100+ commits), deployment infrastructure (`Dockerfile`, `docker-compose.yml`, `k8s/`, `terraform`), and active CI pipelines.
+   - *Action*: Skips initial development ceremony and auto-places directly into **Phase 10 (Change Requests & Operations)**.
+
+#### Automatic Remediation During Init:
+During initialization, the scanner automatically identifies hygiene risks and triggers remediations on the fly:
+- If an unignored `.env` file is found, it adds it to `.gitignore` to prevent credential leaks.
+- If a manifest exists without a lockfile, it triggers lockfile generation.
+
+#### CLI Options for Init:
+```bash
+# Initialize for Arabic client-facing deliverables:
+valdoz project init --lang ar
+
+# Explicitly name your project:
+valdoz project init --name "my-saas-platform"
+
+# Skip the intelligent scanner and force Phase 0:
+valdoz project init --skip-scan
+```
 
 ### Sync Antigravity Runtimes & Install Hooks
 ```bash
@@ -258,16 +282,26 @@ Now you are ready to open slice `02-billing`!
 
 ---
 
-## 7. Universal Hygiene & Auditing
+## 7. Universal Hygiene & Automated Remediation
 
 At any time, you can run a full code audit across your project:
 ```bash
 valdoz audit
 ```
 ValdoZ automatically checks:
-- **Secrets Scan**: Scans for hardcoded AWS keys, OpenAI keys, private keys, and `.env` files.
+- **Secrets Scan**: Scans for hardcoded AWS keys, OpenAI keys, private keys, and `.env` files (distinguishes safely gitignored local files from exposed files).
 - **Lockfile Check**: Verifies that `package-lock.json`, `uv.lock`, etc. are committed and dependencies are pinned.
 - **Undeclared Imports**: Scans Python and JavaScript files to verify that all imported modules are declared in your package manifests (`pyproject.toml`, `package.json`).
+
+### Automated Issue Remediation (`valdoz audit --fix`)
+Instead of just reporting audit failures, ValdoZ can automatically fix common hygiene issues for you:
+```bash
+valdoz audit --fix
+```
+What `--fix` automatically remediates:
+- **Exposed `.env` files**: Automatically appends `.env` to `.gitignore` and untracks it from git cache if accidentally tracked (`git rm --cached .env`).
+- **Missing lockfiles**: Automatically generates `package-lock.json` via `npm install --package-lock-only` (or `uv.lock` via `uv lock`) when a manifest is present.
+- **Re-runs audit**: Confirms that fixes resolved the blocking issues.
 
 ---
 
@@ -360,7 +394,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | Command | Description |
 |---|---|
 | `valdoz --version` | Display ValdoZ version. |
-| `valdoz project init [--lang ar]` | Initialize `.valdoz/` state and deliverable templates. |
+| `valdoz project init [--name <n>] [--lang ar] [--skip-scan]` | Intelligent init: scans project maturity, auto-places phase, applies fixes. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
 | `valdoz hook install` | Install Git pre-commit hook enforcing role domains. |
 | `valdoz ci generate` | Generate GitHub Actions CI verification workflow. |
@@ -381,7 +415,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz research log -u <url> -c <claim>` | Pre-log fetch intent (Gap 4 security defense). |
 | `valdoz research fetch <url>` | Safely fetch and boundary-wrap external web content. |
 | `valdoz research add -u <url> -c <claim>` | Log verified research citation. |
-| `valdoz audit [--strict] [--no-network]` | Run secrets, lockfile, and undeclared import scans. |
+| `valdoz audit [--fix] [--strict] [--no-network]` | Run code hygiene audit; `--fix` auto-remediates secrets & missing lockfiles. |
 | `valdoz pack list` | List available and active stack packs. |
 | `valdoz pack add <pack_id>` | Enable a stack pack (e.g., `web-app`, `api`, `website`). |
 | `valdoz pack import <source> [--id <id>]` | Import plugin from local dir or `wshobson/agents:<plugin>`. |
