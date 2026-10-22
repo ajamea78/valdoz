@@ -65,6 +65,7 @@ class AuditCheckResult(BaseModel):
 class AuditReport(BaseModel):
     passed: bool
     checks: List[AuditCheckResult] = Field(default_factory=list)
+    fixes_applied: List[str] = Field(default_factory=list)
 
 
 def scan_secrets(project_root: Path) -> AuditCheckResult:
@@ -261,12 +262,89 @@ def scan_undeclared_imports(project_root: Path) -> AuditCheckResult:
     )
 
 
+def autofix_audit_issues(project_root: Path) -> List[str]:
+    """Applies safe, automated remediations for common audit failures."""
+    actions_taken: List[str] = []
+
+    # 1. Fix unignored or tracked .env file
+    env_file = project_root / ".env"
+    if env_file.exists():
+        git_dir = project_root / ".git"
+        if git_dir.exists():
+            try:
+                res_ls = subprocess.run(
+                    ["git", "ls-files", ".env"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res_ls.stdout.strip():
+                    subprocess.run(
+                        ["git", "rm", "--cached", ".env"],
+                        cwd=project_root,
+                        capture_output=True,
+                        check=False,
+                    )
+                    actions_taken.append("Untracked '.env' from git index ('git rm --cached .env').")
+            except Exception:
+                pass
+
+        gitignore = project_root / ".gitignore"
+        existing = gitignore.read_text(encoding="utf-8", errors="ignore") if gitignore.exists() else ""
+        lines = [line.strip() for line in existing.splitlines()]
+        if not any(l in (".env", "*.env", ".env*") for l in lines):
+            with open(gitignore, "a", encoding="utf-8") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write(".env\n")
+            actions_taken.append("Added '.env' to .gitignore.")
+
+    # 2. Fix missing lockfiles if package manager is available
+    has_pkg_json = (project_root / "package.json").exists()
+    has_pkg_lock = (project_root / "package-lock.json").exists()
+    if has_pkg_json and not has_pkg_lock:
+        try:
+            res = subprocess.run(
+                ["npm", "install", "--package-lock-only"],
+                cwd=project_root,
+                capture_output=True,
+                check=False,
+            )
+            if res.returncode == 0 and (project_root / "package-lock.json").exists():
+                actions_taken.append("Generated 'package-lock.json' using npm.")
+        except Exception:
+            pass
+
+    has_pyproject = (project_root / "pyproject.toml").exists()
+    has_uv_lock = (project_root / "uv.lock").exists()
+    if has_pyproject and not has_uv_lock:
+        try:
+            res = subprocess.run(
+                ["uv", "lock"],
+                cwd=project_root,
+                capture_output=True,
+                check=False,
+            )
+            if res.returncode == 0 and (project_root / "uv.lock").exists():
+                actions_taken.append("Generated 'uv.lock' using uv.")
+        except Exception:
+            pass
+
+    return actions_taken
+
+
 def run_valdoz_audit(
     project_root: Path,
     strict: bool = False,
     no_network: bool = True,
+    fix: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
+    fixes: List[str] = []
+    if fix:
+        fixes = autofix_audit_issues(project_root)
+
     try:
         state = load_state(project_root)
         pack_ids = state.packs
@@ -311,4 +389,5 @@ def run_valdoz_audit(
     return AuditReport(
         passed=all_passed,
         checks=results,
+        fixes_applied=fixes,
     )

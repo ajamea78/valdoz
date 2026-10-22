@@ -102,3 +102,22 @@ def test_run_valdoz_audit(temp_project: Path):
     report = run_valdoz_audit(temp_project)
     assert report.passed is True
     assert len(report.checks) >= 3
+
+
+def test_autofix_audit_issues(temp_project: Path):
+    # Setup .env file without .gitignore
+    (temp_project / ".env").write_text("SECRET=123\n")
+    (temp_project / "pyproject.toml").write_text("[project]\nname='ok'\ndependencies=['pydantic']\n")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    # Audit without fix fails
+    report_before = run_valdoz_audit(temp_project, fix=False)
+    assert report_before.passed is False
+
+    # Audit with fix automatically remediates .env into .gitignore
+    report_after = run_valdoz_audit(temp_project, fix=True)
+    assert report_after.passed is True
+    assert any("Added '.env' to .gitignore" in fix for fix in report_after.fixes_applied)
+    assert (temp_project / ".gitignore").exists()
+    assert ".env" in (temp_project / ".gitignore").read_text()
+

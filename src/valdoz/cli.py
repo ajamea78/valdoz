@@ -618,12 +618,20 @@ def slice_status_cmd():
 def audit_cmd(
     strict: bool = typer.Option(False, "--strict", help="Fail if any warning check fails"),
     no_network: bool = typer.Option(True, "--no-network", help="Disable checks requiring external network"),
+    fix: bool = typer.Option(False, "--fix", help="Automatically remediate safe audit failures (e.g. add .env to .gitignore, generate lockfile)"),
 ):
     """Runs universal automated checks (secrets, lockfiles, undeclared imports)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
-    report = run_valdoz_audit(root, strict=strict, no_network=no_network)
+    report = run_valdoz_audit(root, strict=strict, no_network=no_network, fix=fix)
+
+    if report.fixes_applied:
+        console.print("[bold green]✓ Automatically applied audit fixes:[/bold green]")
+        for f in report.fixes_applied:
+            console.print(f"  • {f}")
+        console.print()
+
     table = Table(title="ValdoZ Universal Audit")
     table.add_column("Check ID", style="cyan")
     table.add_column("Description")
@@ -652,7 +660,7 @@ def audit_cmd(
     if report.passed:
         console.print("\n[bold green]✓ ValdoZ Audit Passed![/bold green]")
     else:
-        console.print("\n[bold red]✗ ValdoZ Audit Failed![/bold red] Resolve blocking issues above.")
+        console.print("\n[bold red]✗ ValdoZ Audit Failed![/bold red] Resolve blocking issues above (or run 'valdoz audit --fix').")
         raise typer.Exit(1)
 
 
