@@ -114,6 +114,7 @@ def main(
 def project_init(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name"),
     lang: str = typer.Option("en", "--lang", "-l", help="Language for client deliverables: en or ar"),
+    skip_scan: bool = typer.Option(False, "--skip-scan", help="Skip intelligent project scanning"),
 ):
     """Initializes ValdoZ project state in the current repository."""
     root = find_project_root()
@@ -140,17 +141,123 @@ def project_init(
         )
     )
 
+    # ── Intelligent Project Scan ───────────────────────────────────────
+    assessment = None
+    if not skip_scan:
+        from valdoz.scanner import scan_and_assess
+        console.print("\n[bold cyan]🔍 Scanning project directory...[/bold cyan]")
+        assessment = scan_and_assess(root)
+        signals = assessment.signals
+
+        # Display scan results
+        archetype_colors = {
+            "greenfield": "green",
+            "brownfield": "yellow",
+            "production": "cyan",
+        }
+        archetype_label = {
+            "greenfield": "🌱 Greenfield (New Project)",
+            "brownfield": "🏗️  Brownfield (In Development)",
+            "production": "🚀 Production (Live System)",
+        }
+        ac = archetype_colors.get(assessment.archetype, "white")
+        al = archetype_label.get(assessment.archetype, assessment.archetype)
+
+        console.print(f"\n[bold {ac}]Project Archetype: {al}[/bold {ac}]")
+        console.print(f"[dim]Confidence: {assessment.confidence:.0%}[/dim]\n")
+
+        # Scan details table
+        scan_table = Table(title="Project Scan Results", show_lines=False)
+        scan_table.add_column("Signal", style="cyan", min_width=22)
+        scan_table.add_column("Status", justify="center", min_width=8)
+        scan_table.add_column("Details")
+
+        def yes_no(val: bool) -> str:
+            return "[bold green]✓[/bold green]" if val else "[dim]✗[/dim]"
+
+        scan_table.add_row("Source Code", yes_no(signals.has_source_code),
+                          f"{signals.source_file_count} files ({', '.join(sorted(signals.source_languages)) or '-'})")
+        scan_table.add_row("Tests", yes_no(signals.has_tests),
+                          f"{signals.test_file_count} files ({', '.join(sorted(signals.test_frameworks)) or '-'})")
+        scan_table.add_row("Documentation", yes_no(signals.has_docs_dir or signals.has_readme),
+                          f"{'docs/' if signals.has_docs_dir else '-'} {'README' if signals.has_readme else ''}")
+        scan_table.add_row("Package Manifest", yes_no(signals.has_package_manifest),
+                          ", ".join(sorted(signals.manifests_found)) or "-")
+        scan_table.add_row("Lockfile", yes_no(signals.has_lockfile), "Pinned" if signals.has_lockfile else "Missing")
+        scan_table.add_row("CI/CD", yes_no(signals.has_ci_config),
+                          ", ".join(sorted(signals.ci_systems)) or "-")
+        scan_table.add_row("Deploy Configs", yes_no(signals.has_deploy_configs),
+                          " | ".join(filter(None, [
+                              "Docker" if signals.has_dockerfile else "",
+                              "Compose" if signals.has_docker_compose else "",
+                              "K8s" if signals.has_k8s_configs else "",
+                              "Terraform" if signals.has_terraform else "",
+                          ])) or "-")
+        scan_table.add_row("Git History", yes_no(signals.has_git),
+                          f"{signals.git_commit_count} commits, {signals.git_age_days}d old" if signals.has_git else "-")
+        scan_table.add_row("Linter Config", yes_no(signals.has_linter_config),
+                          ", ".join(sorted(signals.linter_configs)) or "-")
+        console.print(scan_table)
+
+        # Warnings
+        if assessment.warnings:
+            console.print()
+            for w in assessment.warnings:
+                console.print(f"  [bold yellow]⚠ {w}[/bold yellow]")
+
+        # Recommendations
+        if assessment.recommendations:
+            console.print()
+            for r in assessment.recommendations:
+                console.print(f"  [dim]💡 {r}[/dim]")
+
+        console.print(f"\n[bold]→ Auto-placing at Phase {assessment.recommended_phase} "
+                      f"({PHASE_NAMES.get(assessment.recommended_phase, '?')})[/bold]")
+        if assessment.pre_approved_phases:
+            console.print(f"  [dim]Pre-approving phases: {', '.join(str(p) for p in assessment.pre_approved_phases)}[/dim]")
+
+    # ── Create State ───────────────────────────────────────────────────
+    starting_phase = assessment.recommended_phase if assessment else 0
+
     state = ValdozState(
         project_name=proj_name,
         language=lang,
-        current_phase=0,
+        current_phase=starting_phase,
         packs=["base"],
     )
+
+    # Pre-approve phases the scanner confirmed are already done
+    if assessment and assessment.pre_approved_phases:
+        for p_num in assessment.pre_approved_phases:
+            p_key = str(p_num)
+            if p_key in state.phases:
+                state.phases[p_key].status = "approved"
+                state.phases[p_key].approved_by = "auto-scanner"
+                state.phases[p_key].approved_at = datetime.now(timezone.utc).isoformat()
+        # Set current phase to in_progress
+        curr_key = str(starting_phase)
+        if curr_key in state.phases:
+            state.phases[curr_key].status = "in_progress"
+
+    # Store detected stack
+    if assessment and assessment.detected_stack:
+        state.chosen_stack = assessment.detected_stack
+
     valdoz_dir.mkdir(parents=True, exist_ok=True)
     save_state(root, state)
 
-    console.print(f"[bold green]ValdoZ v{__version__} initialized for project '{proj_name}' ({lang})[/bold green]")
+    # ── Auto-Remediations ──────────────────────────────────────────────
+    if assessment and assessment.auto_remediations:
+        from valdoz.checks import autofix_audit_issues
+        console.print("\n[bold cyan]🔧 Running automatic remediations...[/bold cyan]")
+        fixes = autofix_audit_issues(root)
+        for fix in fixes:
+            console.print(f"  [green]✓ {fix}[/green]")
+
+    console.print(f"\n[bold green]ValdoZ v{__version__} initialized for project '{proj_name}' ({lang})[/bold green]")
     console.print(f"State file: [cyan]{state_file}[/cyan]")
+    if assessment and assessment.archetype != "greenfield":
+        console.print(f"[dim]Starting at Phase {starting_phase} ({PHASE_NAMES.get(starting_phase, '?')}) based on project scan.[/dim]")
 
 
 # ── Session Commands ────────────────────────────────────────────────────────
