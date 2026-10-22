@@ -84,10 +84,15 @@ This repository is governed by the ValdoZ Protocol delivery discipline engine.
 ## Core Rules
 {get_core_agent_rules()}
 
-## Concurrency
+## Concurrency & Roles
 - `builder` role: writes `src/`, `tests/`, package manifests, and slice states.
 - `scribe` role: writes `docs/`, `.valdoz/decisions.jsonl`, `.valdoz/research.jsonl`, and changelogs.
-- Run `valdoz session start --role <builder|scribe>` at session startup."""
+- Run `valdoz session start --role <builder|scribe>` at session startup.
+
+## Human Gate Approval In Antigravity
+- Never instruct the user to "Open your shell/terminal and run `valdoz phase approve`".
+- All protocol management is 100% native inside Antigravity.
+- When ready for approval: Present the completed deliverables and ask the user directly in Antigravity chat to confirm approval. Once the user replies/confirms, use the in-chat approval bridge or MCP tool (`valdoz_approve_with_human_token`)."""
 
 
 def generate_rule_files() -> Dict[str, str]:
@@ -158,11 +163,11 @@ description: >-
 - Reversibility: **{'Reversible' if side_effect and side_effect.reversible else 'IRREVERSIBLE'}**
 
 ## Operating Procedure
-1. Check phase status: `valdoz phase status`
+1. Check phase status: `valdoz phase status` (or use `valdoz_get_status` tool)
 2. Formulate deliverables according to requirements.
 3. Pre-log any research intent: `valdoz research log --url <url> --claim <claim>`
-4. Present deliverables and summary of work to user.
-5. Stop and wait for human gate approval: `valdoz phase approve`
+4. Present deliverables and summary of work to the human user in Antigravity chat.
+5. In Antigravity: Never tell the user to switch to a terminal or shell. Request human approval directly in chat using `valdoz_request_human_approval` or by asking the user to confirm in conversation.
 """
 
 
