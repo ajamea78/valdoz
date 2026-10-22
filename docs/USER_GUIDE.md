@@ -4,6 +4,20 @@
 
 ---
 
+## Table of Contents
+1. [What is ValdoZ? (The 30-Second Mental Model)](#1-what-is-valdoz-the-30-second-mental-model)
+2. [Quick Setup (2-Minute Onboarding)](#2-quick-setup-2-minute-onboarding)
+3. [The Core Concept: Builder & Scribe Roles](#3-the-core-concept-builder--scribe-roles)
+4. [The 10 Project Phases (Cheat Sheet)](#4-the-10-project-phases-cheat-sheet)
+5. [The Daily Workflow (Step-by-Step)](#5-the-daily-workflow-step-by-step)
+6. [Phase 6: Mastering Build Slices](#6-phase-6-mastering-build-slices)
+7. [Universal Hygiene & Auditing](#7-universal-hygiene--auditing)
+8. [Stack Packs, Ecosystem Plugins & SDK Agents](#8-stack-packs-ecosystem-plugins--sdk-agents)
+9. [Emergency Recovery & Troubleshooting](#9-emergency-recovery--troubleshooting)
+10. [Complete CLI Command Reference](#10-complete-cli-command-reference)
+
+---
+
 ## 1. What is ValdoZ? (The 30-Second Mental Model)
 
 Autonomous AI coding agents like **Google Antigravity** are fast, but left unconstrained they sprint past key decisions:
@@ -268,6 +282,27 @@ When imported:
 2. Rules are copied to `.agent/rules/`.
 3. A `manifest.yaml` is generated in `.valdoz/packs/<id>/` with audit checks.
 4. The pack is activated in `state.json` and synchronized into Antigravity runtimes.
+
+### Programmatic Google Antigravity SDK Agents
+If you run automated Antigravity agents via the official Python SDK (`google-antigravity`), ValdoZ exposes native tool definitions for direct agent invocation:
+
+```python
+from google import antigravity
+from valdoz.sdk_bridge import get_valdoz_native_tools
+
+# Register ValdoZ enforcement tools (valdoz_gate_check, valdoz_slice_done, valdoz_research_log)
+native_tools = get_valdoz_native_tools()
+```
+
+### Zero-Cost LLM Testing via FreeLLMAPI
+During development and milestone testing, avoid racking up commercial API bills by routing agent requests through a local FreeLLMAPI proxy (providing 358 free endpoints):
+
+```python
+from valdoz.sdk_bridge import get_freellmapi_config
+
+# Generates zero-persistence OpenAI-compatible client configuration
+config = get_freellmapi_config(base_url="http://localhost:8000/v1")
+```
 
 ---
 
