@@ -150,3 +150,27 @@ def test_cli_slice_workflow(run_in_tmp: Path):
     assert "completed successfully" in res_done.output
 
 
+def test_cli_audit(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "audit-cli-test"])
+    res_audit = runner.invoke(app, ["audit"])
+    assert res_audit.exit_code == 0
+    assert "ValdoZ Universal Audit" in res_audit.output
+    assert "Audit Passed" in res_audit.output
+
+
+def test_cli_pack_commands(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "pack-cli-test"])
+
+    # List packs
+    res_list = runner.invoke(app, ["pack", "list"])
+    assert res_list.exit_code == 0
+    assert "web-app" in res_list.output
+    assert "base" in res_list.output
+
+    # Add pack
+    res_add = runner.invoke(app, ["pack", "add", "web-app"])
+    assert res_add.exit_code == 0
+    assert "Enabled pack 'web-app'" in res_add.output
+
+
+

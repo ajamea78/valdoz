@@ -74,6 +74,7 @@ research_app = typer.Typer(name="research", help="Research subsystem commands", 
 state_app = typer.Typer(name="state", help="State inspection and repair", no_args_is_help=True)
 gate_app = typer.Typer(name="gate", help="Gate verification engine", no_args_is_help=True)
 slice_app = typer.Typer(name="slice", help="Phase 6 slice governance", no_args_is_help=True)
+pack_app = typer.Typer(name="pack", help="Stack and project-type packs", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -83,6 +84,7 @@ app.add_typer(research_app)
 app.add_typer(state_app)
 app.add_typer(gate_app)
 app.add_typer(slice_app)
+app.add_typer(pack_app)
 
 
 def find_project_root() -> Path:
@@ -605,6 +607,107 @@ def slice_status_cmd():
             s.approved_at or "-",
         )
     console.print(table)
+
+
+# ── Audit Command ───────────────────────────────────────────────────────────
+@app.command("audit")
+def audit_cmd(
+    strict: bool = typer.Option(False, "--strict", help="Fail if any warning check fails"),
+    no_network: bool = typer.Option(True, "--no-network", help="Disable checks requiring external network"),
+):
+    """Runs universal automated checks (secrets, lockfiles, undeclared imports)."""
+    root = find_project_root()
+    from valdoz.checks import run_valdoz_audit
+
+    report = run_valdoz_audit(root, strict=strict, no_network=no_network)
+    table = Table(title="ValdoZ Universal Audit")
+    table.add_column("Check ID", style="cyan")
+    table.add_column("Description")
+    table.add_column("Severity", justify="center")
+    table.add_column("Status", justify="center")
+    table.add_column("Result", justify="center")
+    table.add_column("Message")
+
+    for c in report.checks:
+        res_str = (
+            "[dim]SKIPPED[/dim]" if c.status == "skipped"
+            else ("[bold green]PASS[/bold green]" if c.passed
+                  else ("[bold red]FAIL[/bold red]" if c.severity == "blocking" else "[yellow]WARN[/yellow]"))
+        )
+        sev_color = "red" if c.severity == "blocking" else "yellow"
+        table.add_row(
+            c.id,
+            c.name,
+            f"[{sev_color}]{c.severity}[/{sev_color}]",
+            c.status,
+            res_str,
+            c.message,
+        )
+
+    console.print(table)
+    if report.passed:
+        console.print("\n[bold green]✓ ValdoZ Audit Passed![/bold green]")
+    else:
+        console.print("\n[bold red]✗ ValdoZ Audit Failed![/bold red] Resolve blocking issues above.")
+        raise typer.Exit(1)
+
+
+# ── Pack Commands ───────────────────────────────────────────────────────────
+@pack_app.command("list")
+def pack_list_cmd():
+    """Lists available built-in packs and active project packs."""
+    root = find_project_root()
+    from valdoz.packs import BUILTIN_PACKS
+    try:
+        state = load_state(root)
+        active_ids = set(state.packs)
+    except Exception:
+        active_ids = {"base"}
+
+    table = Table(title="Available Stack & Project Packs")
+    table.add_column("Pack ID", style="bold cyan")
+    table.add_column("Name")
+    table.add_column("Version", justify="center")
+    table.add_column("Active", justify="center")
+    table.add_column("Description")
+
+    for pid, p in BUILTIN_PACKS.items():
+        is_active = pid in active_ids
+        table.add_row(
+            pid,
+            p.name,
+            p.version,
+            "[bold green]YES[/bold green]" if is_active else "[dim]NO[/dim]",
+            p.description,
+        )
+    console.print(table)
+
+
+@pack_app.command("add")
+def pack_add_cmd(
+    pack_id: str = typer.Argument(..., help="Pack identifier to enable (e.g., web-app, api, website)"),
+):
+    """Enables a stack pack for the current project."""
+    root = find_project_root()
+    from valdoz.packs import BUILTIN_PACKS, PackError
+    try:
+        state = load_state(root)
+    except StateError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    pid = pack_id.lower().strip()
+    if pid not in BUILTIN_PACKS:
+        console.print(f"[bold red]Unknown pack:[/bold red] '{pid}'. Run 'valdoz pack list' to view available packs.")
+        raise typer.Exit(1)
+
+    if pid in state.packs:
+        console.print(f"[yellow]Pack '{pid}' is already enabled.[/yellow]")
+        return
+
+    state.packs.append(pid)
+    save_state(root, state)
+    console.print(f"[bold green]Enabled pack '{pid}' ({BUILTIN_PACKS[pid].name})![/bold green]")
 
 
 # ── Doctor Command ──────────────────────────────────────────────────────────
