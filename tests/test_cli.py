@@ -117,3 +117,36 @@ def test_cli_sync_runtimes(run_in_tmp: Path):
     assert (run_in_tmp / "GEMINI.md").exists()
     assert (run_in_tmp / ".agent" / "skills" / "valdoz-phase-1-intake" / "SKILL.md").exists()
 
+
+def test_cli_gate_check(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "gate-cli-test"])
+    # Phase 0 gate check should pass (state.json exists)
+    res_gate = runner.invoke(app, ["gate", "check", "--phase", "0"])
+    assert res_gate.exit_code == 0
+    assert "Gate Passed" in res_gate.output
+
+
+def test_cli_slice_workflow(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "slice-cli-test"])
+
+    # Create spec for slice 01
+    spec_file = run_in_tmp / "docs" / "slices" / "01-login.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text("# Slice\n## Summary\nLogin.\n## Acceptance Criteria\nPass.\n## Test Plan\nTests.\n## File Manifest\nCode.\n")
+
+    # Start slice
+    res_start = runner.invoke(app, ["slice", "start", "01-login"])
+    assert res_start.exit_code == 0
+    assert "Slice '01-login' started" in res_start.output
+
+    # Status
+    res_status = runner.invoke(app, ["slice", "status"])
+    assert res_status.exit_code == 0
+    assert "01-login" in res_status.output
+
+    # Done
+    res_done = runner.invoke(app, ["slice", "done", "01-login"])
+    assert res_done.exit_code == 0
+    assert "completed successfully" in res_done.output
+
+

@@ -72,6 +72,8 @@ project_app = typer.Typer(name="project", help="Project lifecycle commands", no_
 decision_app = typer.Typer(name="decision", help="Decision log commands", no_args_is_help=True)
 research_app = typer.Typer(name="research", help="Research subsystem commands", no_args_is_help=True)
 state_app = typer.Typer(name="state", help="State inspection and repair", no_args_is_help=True)
+gate_app = typer.Typer(name="gate", help="Gate verification engine", no_args_is_help=True)
+slice_app = typer.Typer(name="slice", help="Phase 6 slice governance", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -79,6 +81,8 @@ app.add_typer(project_app)
 app.add_typer(decision_app)
 app.add_typer(research_app)
 app.add_typer(state_app)
+app.add_typer(gate_app)
+app.add_typer(slice_app)
 
 
 def find_project_root() -> Path:
@@ -477,6 +481,130 @@ def sync_runtimes_cmd(
     except Exception as e:
         console.print(f"[bold red]Sync Failed:[/bold red] {e}")
         raise typer.Exit(1)
+
+
+# ── Gate Commands ───────────────────────────────────────────────────────────
+@gate_app.command("check")
+def gate_check(
+    phase: Optional[int] = typer.Option(None, "--phase", "-p", help="Phase number to check"),
+    ci: bool = typer.Option(False, "--ci", help="CI verification mode"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dry run preview"),
+):
+    """Runs deliverable, placeholder, heading, and research citation gate checks."""
+    root = find_project_root()
+    from valdoz.gates import run_phase_gate_checks
+
+    report = run_phase_gate_checks(root, phase_num=phase, ci_mode=ci)
+    table = Table(title=f"Gate Check: Phase {report.phase} ({report.phase_name})")
+    table.add_column("Check ID", style="cyan")
+    table.add_column("Description")
+    table.add_column("Severity", justify="center")
+    table.add_column("Result", justify="center")
+    table.add_column("Message")
+
+    for c in report.checks:
+        res_str = "[bold green]PASS[/bold green]" if c.passed else (
+            "[bold red]FAIL[/bold red]" if c.severity == "blocking" else "[yellow]WARN[/yellow]"
+        )
+        sev_color = "red" if c.severity == "blocking" else "yellow"
+        table.add_row(
+            c.id,
+            c.name,
+            f"[{sev_color}]{c.severity}[/{sev_color}]",
+            res_str,
+            c.message,
+        )
+
+    console.print(table)
+    if report.passed:
+        console.print(f"\n[bold green]✓ Phase {report.phase} Gate Passed![/bold green] Ready for human approval.")
+    else:
+        console.print(f"\n[bold red]✗ Phase {report.phase} Gate Failed![/bold red] Resolve blocking failures above.")
+        raise typer.Exit(1)
+
+
+# ── Slice Commands ──────────────────────────────────────────────────────────
+@slice_app.command("start")
+def slice_start_cmd(
+    slice_id: str = typer.Argument(..., help="Slice identifier (e.g., 01-user-auth)"),
+):
+    """Starts a Phase 6 build slice after checking spec and previous slice approval."""
+    root = find_project_root()
+    from valdoz.slices import start_slice, SliceError
+    try:
+        s = start_slice(root, slice_id)
+        console.print(f"[bold green]Slice '{s.slice_id}' started![/bold green] Base commit: [cyan]{s.base_commit[:8]}[/cyan]")
+    except SliceError as e:
+        console.print(f"[bold red]Cannot Start Slice:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+@slice_app.command("done")
+def slice_done_cmd(
+    slice_id: str = typer.Argument(..., help="Slice identifier"),
+    cov_delta: float = typer.Option(0.0, "--cov-delta", help="Test coverage delta percentage"),
+):
+    """Closes a slice with test evidence, evaluating the Three Slice Gate Conditions."""
+    root = find_project_root()
+    from valdoz.slices import done_slice, SliceError, SliceGateConditionError
+    try:
+        s = done_slice(root, slice_id, coverage_delta=cov_delta)
+        console.print(f"[bold green]Slice '{s.slice_id}' completed successfully![/bold green] Status: [cyan]gated[/cyan].")
+        console.print("Three Slice Gate Conditions verified: pre-existing tests pass, new tests pass, coverage maintained.")
+    except SliceGateConditionError as e:
+        console.print(f"[bold red]Slice Gate Condition Failure:[/bold red] {e}")
+        raise typer.Exit(1)
+    except SliceError as e:
+        console.print(f"[bold red]Slice Error:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+@slice_app.command("approve")
+def slice_approve_cmd(
+    slice_id: str = typer.Argument(..., help="Slice identifier to approve"),
+):
+    """Interactively approves a gated slice (Human-Only, Interactive TTY)."""
+    root = find_project_root()
+    from valdoz.slices import approve_slice, SliceError
+
+    console.print(f"\n[bold yellow]Human Gate Approval — Slice: {slice_id}[/bold yellow]")
+    confirm = typer.prompt(f"Type '{slice_id}' to approve slice")
+    try:
+        s = approve_slice(root, slice_id, confirmation_input=confirm, enforce_tty=True)
+        console.print(f"[bold green]Slice '{s.slice_id}' successfully approved![/bold green] State write-protected.")
+    except NonInteractiveApprovalError as e:
+        console.print(f"[bold red]Security Error:[/bold red] {e}")
+        raise typer.Exit(1)
+    except SliceError as e:
+        console.print(f"[bold red]Approval Failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+@slice_app.command("status")
+def slice_status_cmd():
+    """Lists all Phase 6 slices and their states."""
+    root = find_project_root()
+    from valdoz.slices import list_slices
+    slices = list_slices(root)
+    if not slices:
+        console.print("[dim]No slices found in .valdoz/slices/.[/dim]")
+        return
+
+    table = Table(title="Phase 6 Build Slices")
+    table.add_column("Slice ID", style="bold cyan")
+    table.add_column("Status", justify="center")
+    table.add_column("Approved By")
+    table.add_column("Approved At")
+
+    for s in slices:
+        color = {"approved": "green", "gated": "yellow", "open": "cyan"}.get(s.status, "white")
+        table.add_row(
+            s.slice_id,
+            f"[{color}]{s.status}[/{color}]",
+            s.approved_by or "-",
+            s.approved_at or "-",
+        )
+    console.print(table)
 
 
 # ── Doctor Command ──────────────────────────────────────────────────────────
