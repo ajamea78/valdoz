@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "valdoz-protocol"
+version = "3.0.0"
+description = "Antigravity delivery discipline engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "ValdoZ Contributors" }
+]
+dependencies = [
+    "typer>=0.12.0",
+    "pydantic>=2.5.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "playwright>=1.40.0",
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+]
+
+[project.scripts]
+valdoz = "valdoz.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/valdoz"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
