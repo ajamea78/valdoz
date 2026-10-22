@@ -119,19 +119,24 @@ def resolve_active_packs(
         if pid not in resolved_order:
             resolved_order.append(pid)
 
+    packs_dirs = [custom_packs_dir] if custom_packs_dir else [Path.cwd() / ".valdoz" / "packs"]
     packs: List[PackManifest] = []
+
     for pid in resolved_order:
         if pid in BUILTIN_PACKS:
             packs.append(BUILTIN_PACKS[pid])
-        elif custom_packs_dir:
-            custom_manifest = custom_packs_dir / pid / "manifest.yaml"
-            if custom_manifest.exists():
-                data = yaml.safe_load(custom_manifest.read_text(encoding="utf-8"))
-                packs.append(PackManifest(**data))
-            else:
-                raise PackError(f"Pack manifest '{pid}' not found.")
         else:
-            raise PackError(f"Unknown pack ID: '{pid}'")
+            found = False
+            for pdir in packs_dirs:
+                if pdir and pdir.exists():
+                    custom_manifest = pdir / pid / "manifest.yaml"
+                    if custom_manifest.exists():
+                        data = yaml.safe_load(custom_manifest.read_text(encoding="utf-8"))
+                        packs.append(PackManifest(**data))
+                        found = True
+                        break
+            if not found:
+                raise PackError(f"Pack manifest '{pid}' not found.")
     return packs
 
 

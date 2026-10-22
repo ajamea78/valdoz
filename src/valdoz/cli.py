@@ -684,6 +684,26 @@ def pack_list_cmd():
             "[bold green]YES[/bold green]" if is_active else "[dim]NO[/dim]",
             p.description,
         )
+
+    # Also list imported custom packs in .valdoz/packs/
+    custom_packs_dir = root / ".valdoz" / "packs"
+    if custom_packs_dir.exists():
+        import yaml
+        for cdir in sorted(custom_packs_dir.iterdir()):
+            if cdir.is_dir() and (cdir / "manifest.yaml").exists() and cdir.name not in BUILTIN_PACKS:
+                try:
+                    cdata = yaml.safe_load((cdir / "manifest.yaml").read_text(encoding="utf-8"))
+                    is_active = cdir.name in active_ids
+                    table.add_row(
+                        cdir.name,
+                        cdata.get("name", cdir.name),
+                        cdata.get("version", "1.0.0"),
+                        "[bold green]YES[/bold green]" if is_active else "[dim]NO[/dim]",
+                        cdata.get("description", "Custom imported pack"),
+                    )
+                except Exception:
+                    pass
+
     console.print(table)
 
 
@@ -701,7 +721,8 @@ def pack_add_cmd(
         raise typer.Exit(1)
 
     pid = pack_id.lower().strip()
-    if pid not in BUILTIN_PACKS:
+    custom_manifest = root / ".valdoz" / "packs" / pid / "manifest.yaml"
+    if pid not in BUILTIN_PACKS and not custom_manifest.exists():
         console.print(f"[bold red]Unknown pack:[/bold red] '{pid}'. Run 'valdoz pack list' to view available packs.")
         raise typer.Exit(1)
 
@@ -711,7 +732,30 @@ def pack_add_cmd(
 
     state.packs.append(pid)
     save_state(root, state)
-    console.print(f"[bold green]Enabled pack '{pid}' ({BUILTIN_PACKS[pid].name})![/bold green]")
+    p_name = BUILTIN_PACKS[pid].name if pid in BUILTIN_PACKS else pid
+    console.print(f"[bold green]Enabled pack '{pid}' ({p_name})![/bold green]")
+
+
+@pack_app.command("import")
+def pack_import_cmd(
+    source: str = typer.Argument(..., help="Path to plugin directory or 'wshobson/agents:<plugin>'"),
+    pack_id: Optional[str] = typer.Option(None, "--id", "-i", help="Custom pack ID to assign"),
+    sync: bool = typer.Option(True, "--sync/--no-sync", help="Automatically run runtime sync after import"),
+):
+    """Imports an external plugin (e.g. wshobson/agents) into a ValdoZ pack."""
+    root = find_project_root()
+    from valdoz.importer import import_pack
+    from valdoz.packs import PackError
+    try:
+        manifest = import_pack(root, source=source, pack_id=pack_id)
+        console.print(f"[bold green]Successfully imported pack:[/bold green] [cyan]{manifest.id}[/cyan] ({manifest.name})")
+        if sync:
+            from valdoz.sync import sync_all_runtimes
+            sync_all_runtimes(root)
+            console.print("[dim]Runtimes synced. Added skills and rules.[/dim]")
+    except PackError as e:
+        console.print(f"[bold red]Pack Import Error:[/bold red] {e}")
+        raise typer.Exit(1)
 
 
 # ── Hook Commands ───────────────────────────────────────────────────────────
