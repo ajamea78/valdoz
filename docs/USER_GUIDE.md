@@ -240,7 +240,38 @@ ValdoZ automatically checks:
 
 ---
 
-## 8. Emergency Recovery & Troubleshooting
+## 8. Stack Packs & Ecosystem Marketplace Plugins
+
+ValdoZ supports composable **Packs** that extend your project with stack-specific rules, skills, and automated audit checks.
+
+### Enabling Built-in Packs
+List available packs:
+```bash
+valdoz pack list
+```
+Enable a pack (e.g., `web-app`, `api`, `website`):
+```bash
+valdoz pack add web-app
+```
+
+### Importing Marketplace Plugins (`wshobson/agents` Bridge)
+ValdoZ can directly adapt external agentic plugins (such as marketplace plugins from `wshobson/agents` or local plugin folders):
+```bash
+# Import a plugin directly from the wshobson/agents marketplace
+valdoz pack import wshobson/agents:code-reviewer
+
+# Or import from a local plugin directory
+valdoz pack import ./my-custom-plugin --id custom-tools
+```
+When imported:
+1. Skills are extracted, wrapped with valid YAML frontmatter, and placed in `.agent/skills/`.
+2. Rules are copied to `.agent/rules/`.
+3. A `manifest.yaml` is generated in `.valdoz/packs/<id>/` with audit checks.
+4. The pack is activated in `state.json` and synchronized into Antigravity runtimes.
+
+---
+
+## 9. Emergency Recovery & Troubleshooting
 
 ### If an Approved Phase Needs Changes (`reopen`)
 If a discovery in Phase 6 requires modifying the Architecture from Phase 4:
@@ -272,7 +303,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 
 ---
 
-## 9. Complete CLI Command Reference
+## 10. Complete CLI Command Reference
 
 | Command | Description |
 |---|---|
@@ -301,5 +332,6 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz audit [--strict] [--no-network]` | Run secrets, lockfile, and undeclared import scans. |
 | `valdoz pack list` | List available and active stack packs. |
 | `valdoz pack add <pack_id>` | Enable a stack pack (e.g., `web-app`, `api`, `website`). |
+| `valdoz pack import <source> [--id <id>]` | Import plugin from local dir or `wshobson/agents:<plugin>`. |
 | `valdoz state repair` | Reconstruct `state.json` from git history. |
 | `valdoz doctor` | Run environment diagnostics and Python drift checks. |
