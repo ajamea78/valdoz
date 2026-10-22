@@ -30,7 +30,7 @@ def test_approval_refuses_non_interactive_tty(initialized_project: Path, monkeyp
     import sys
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
-    with pytest.raises(NonInteractiveApprovalError, match="requires an interactive terminal"):
+    with pytest.raises(NonInteractiveApprovalError, match="explicit human authorization|requires an interactive terminal"):
         approve_phase(initialized_project, phase_num=1, enforce_tty=True)
 
 

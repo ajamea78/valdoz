@@ -77,6 +77,7 @@ slice_app = typer.Typer(name="slice", help="Phase 6 slice governance", no_args_i
 pack_app = typer.Typer(name="pack", help="Stack and project-type packs", no_args_is_help=True)
 hook_app = typer.Typer(name="hook", help="Git hook management", no_args_is_help=True)
 ci_app = typer.Typer(name="ci", help="CI workflow management", no_args_is_help=True)
+mcp_app = typer.Typer(name="mcp", help="Native Model Context Protocol integration", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -89,6 +90,7 @@ app.add_typer(slice_app)
 app.add_typer(pack_app)
 app.add_typer(hook_app)
 app.add_typer(ci_app)
+app.add_typer(mcp_app)
 
 
 def find_project_root() -> Path:
@@ -958,4 +960,56 @@ def doctor():
             console.print(f"    - {s['id']}: '{s['claim']}' is {s['age_days']} days old (limit: {s['valid_for_days']}d)")
     else:
         console.print("  [green]✓[/green] Research citations up to date.")
+
+
+# ── MCP Commands ────────────────────────────────────────────────────────────
+@mcp_app.command("run")
+def mcp_run_cmd():
+    """Starts the standard stdio MCP server for native Antigravity tool calling."""
+    from valdoz.mcp_server import run_stdio_server
+    root = find_project_root()
+    run_stdio_server(root)
+
+
+@mcp_app.command("register")
+def mcp_register_cmd():
+    """Registers ValdoZ MCP server into global Antigravity config (~/.gemini/config/mcp_config.json)."""
+    import json
+    cfg_path = Path.home() / ".gemini" / "config" / "mcp_config.json"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+
+    data = {"mcpServers": {}}
+    if cfg_path.exists():
+        try:
+            data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {"mcpServers": {}}
+
+    if "mcpServers" not in data:
+        data["mcpServers"] = {}
+
+    data["mcpServers"]["valdoz"] = {
+        "command": sys.executable,
+        "args": ["-m", "valdoz.cli", "mcp", "run"],
+    }
+
+    cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    console.print(f"[bold green]Registered ValdoZ MCP server in:[/bold green] [cyan]{cfg_path}[/cyan]")
+    console.print("Antigravity will now natively discover ValdoZ tools on next session.")
+
+
+# ── Dashboard Command ───────────────────────────────────────────────────────
+@app.command("dashboard")
+def dashboard_cmd(
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Custom output path for dashboard HTML"),
+):
+    """Generates the live interactive ValdoZ Generative UI dashboard."""
+    from valdoz.dashboard import generate_dashboard_html
+    root = find_project_root()
+    html_content = generate_dashboard_html(root)
+    out_file = output or (root / ".valdoz" / "dashboard.html")
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(html_content, encoding="utf-8")
+    console.print(f"[bold green]Live ValdoZ Dashboard generated at:[/bold green] [cyan]{out_file}[/cyan]")
+
 

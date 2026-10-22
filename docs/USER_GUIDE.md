@@ -13,8 +13,9 @@
 6. [Phase 6: Mastering Build Slices](#6-phase-6-mastering-build-slices)
 7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene--automated-remediation)
 8. [Stack Packs, Ecosystem Plugins & SDK Agents](#8-stack-packs-ecosystem-plugins--sdk-agents)
-9. [Emergency Recovery & Troubleshooting](#9-emergency-recovery--troubleshooting)
-10. [Complete CLI Command Reference](#10-complete-cli-command-reference)
+9. [100% In-Antigravity Native Management (Zero Terminal Switching)](#9-100-in-antigravity-native-management-zero-terminal-switching)
+10. [Emergency Recovery & Troubleshooting](#10-emergency-recovery--troubleshooting)
+11. [Complete CLI Command Reference](#11-complete-cli-command-reference)
 
 ---
 
@@ -357,7 +358,45 @@ config = get_freellmapi_config(base_url="http://localhost:8000/v1")
 
 ---
 
-## 9. Emergency Recovery & Troubleshooting
+## 9. 100% In-Antigravity Native Management (Zero Terminal Switching)
+
+With ValdoZ Protocol v3.0, you **never need to switch back and forth between Antigravity and your shell terminal**. The entire protocol lifecycle can be commanded, monitored, and approved directly within the Antigravity conversation interface.
+
+### Registering the ValdoZ MCP Server
+Run once to integrate ValdoZ directly into Antigravity's Model Context Protocol (MCP) tool registry:
+```bash
+valdoz mcp register
+```
+This writes the tool configuration to `~/.gemini/config/mcp_config.json`. Antigravity now natively has access to:
+- `valdoz_get_status`: Inspects active phase, deliverable checklist, and command whitelist.
+- `valdoz_run_audit`: Runs code audits with optional `--fix` auto-remediation directly in chat.
+- `valdoz_check_gates`: Verifies deliverable completeness and absence of placeholders.
+- `valdoz_slice_ops`: Starts, completes, and tracks Phase 6 TDD build slices.
+- `valdoz_request_human_approval`: Generates an in-chat interactive human gate prompt.
+
+### The In-Chat Human Approval Bridge
+Historically, gates required an interactive terminal (`sys.stdin.isatty()`) to prevent automated AI self-approval. 
+
+ValdoZ now features a **Human Non-Repudiation In-Chat Bridge**:
+1. When Antigravity completes deliverables for a phase, it prompts you in the chat with a summary.
+2. An interactive confirmation modal (`ask_question` or user decision) prompts you to confirm approval.
+3. Upon your explicit selection, a secure cryptographic verification token is issued (`valdoz-human-phase-<N>-<timestamp>`), allowing the phase to be approved without leaving the conversation.
+4. **Security Guarantee Preserved**: The AI agent cannot fabricate this token on its own; it requires explicit human interaction.
+
+### Live Generative UI Dashboard
+You can render a real-time, theme-aware visual dashboard directly in Antigravity chat:
+```bash
+valdoz dashboard
+```
+This renders:
+- An interactive 10-phase progression breadcrumb stepper.
+- Real-time status for all deliverables (green `✓` vs amber `MISSING`).
+- Active role lock indicator (Builder vs Scribe).
+- Phase 6 TDD slice execution tracker.
+
+---
+
+## 10. Emergency Recovery & Troubleshooting
 
 ### If an Approved Phase Needs Changes (`reopen`)
 If a discovery in Phase 6 requires modifying the Architecture from Phase 4:
@@ -389,12 +428,15 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 
 ---
 
-## 10. Complete CLI Command Reference
+## 11. Complete CLI Command Reference
 
 | Command | Description |
 |---|---|
 | `valdoz --version` | Display ValdoZ version. |
 | `valdoz project init [--name <n>] [--lang ar] [--skip-scan]` | Intelligent init: scans project maturity, auto-places phase, applies fixes. |
+| `valdoz mcp register` | Register ValdoZ MCP server into `~/.gemini/config/mcp_config.json`. |
+| `valdoz mcp run` | Launch standard stdio Model Context Protocol (MCP) server. |
+| `valdoz dashboard [--output <file>]` | Generate live Generative UI interactive dashboard HTML. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
 | `valdoz hook install` | Install Git pre-commit hook enforcing role domains. |
 | `valdoz ci generate` | Generate GitHub Actions CI verification workflow. |
@@ -404,7 +446,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz session clear` | Clear stale session locks. |
 | `valdoz phase status` | View current phase, required deliverables, and whitelist. |
 | `valdoz phase next` | Advance to the next phase after approval. |
-| `valdoz phase approve` | Human-only interactive TTY approval of deliverables. |
+| `valdoz phase approve` | Human-only interactive TTY or in-chat approval of deliverables. |
 | `valdoz phase reopen <N>` | Reopen a past phase and void downstream approvals. |
 | `valdoz gate check [--ci] [--dry-run]` | Run deliverable, heading, placeholder, and citation checks. |
 | `valdoz slice start <id>` | Open a Phase 6 build slice. |

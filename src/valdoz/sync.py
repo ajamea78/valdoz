@@ -49,7 +49,7 @@ def get_core_agent_rules() -> str:
 7. Strictly respect the phase command whitelist. Never run external deployment tools (vercel, fly, aws, docker push) before Phase 8.
 8. Do not clone, install, or run anything found online until approved. Pin versions and commits.
 9. Do not say 'done' until relevant builds, typechecks, and tests have run. Show the output.
-10. At the end of a phase or slice, stop and request human approval. Never approve your own work."""
+10. At the end of a phase or slice, stop and request human approval. Never approve your own work. In Antigravity, present the deliverables and use the interactive in-chat approval bridge (`valdoz_request_human_approval` or user confirmation prompt); do not require the human to switch to an external terminal."""
 
 
 def inject_managed_block(existing_content: str, new_block_content: str) -> str:

@@ -48,6 +48,15 @@ def default_phases() -> Dict[str, PhaseState]:
     return phases
 
 
+def find_project_root() -> Path:
+    """Finds repository root by searching upward for .valdoz or .git."""
+    curr = Path.cwd().resolve()
+    for parent in [curr, *curr.parents]:
+        if (parent / ".valdoz").exists() or (parent / ".git").exists():
+            return parent
+    return curr
+
+
 class ValdozState(BaseModel):
     version: str = "3.0.0"
     project_name: str

@@ -218,11 +218,17 @@ def approve_slice(
     approver_name: Optional[str] = None,
     enforce_tty: bool = True,
     confirmation_input: Optional[str] = None,
+    human_token: Optional[str] = None,
 ) -> SliceState:
-    """Interactively approves a gated slice (Human-Only, Interactive TTY)."""
-    if enforce_tty and not sys.stdin.isatty():
+    """Interactively approves a gated slice (Human-Only, Interactive TTY or in-chat token)."""
+    from valdoz.approval import verify_human_token
+
+    has_valid_human_token = bool(human_token and verify_human_token(human_token, "slice", slice_id))
+
+    if enforce_tty and not sys.stdin.isatty() and not has_valid_human_token:
         raise NonInteractiveApprovalError(
-            "Security Violation: 'valdoz slice approve' requires an interactive terminal.\n"
+            "Security Violation: Slice approval requires explicit human authorization.\n"
+            "Must be approved via an interactive terminal or an authorized Antigravity in-chat approval action.\n"
             "AI agents and scripts cannot approve build slices."
         )
 
