@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ValdoZ Protocol v3.0 — The Autonomous Delivery Harness for Google Antigravity</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f293d;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 50%, #34d399 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .terminal-window {
+      background-color: #0b0f19;
+      border: 1px solid #1e293b;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+    }
+    .phase-badge-active {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+  <!-- Header / Navigation -->
+  <header class="border-b border-slate-800/80 sticky top-0 bg-[#090d16]/90 backdrop-blur-md z-50">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+          V
+        </div>
+        <span class="font-bold text-lg tracking-tight">ValdoZ <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">v3.0</span></span>
+      </div>
+      <nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-300">
+        <a href="#problems" class="hover:text-cyan-400 transition-colors">The 5 Fatal Traps</a>
+        <a href="#phases" class="hover:text-cyan-400 transition-colors">10-Phase Stepper</a>
+        <a href="#terminal" class="hover:text-cyan-400 transition-colors">Live Simulator</a>
+        <a href="#personas" class="hover:text-cyan-400 transition-colors">Who It's For</a>
+        <a href="#comparison" class="hover:text-cyan-400 transition-colors">Comparison</a>
+      </nav>
+      <div class="flex items-center space-x-3">
+        <a href="https://github.com/akhalil/valdoz" target="_blank" class="text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition">
+          GitHub
+        </a>
+        <a href="#quickstart" class="text-xs font-semibold px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 text-white hover:opacity-95 shadow-md shadow-cyan-500/10 transition">
+          Quickstart
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative pt-20 pb-16 overflow-hidden">
+    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none"></div>
+    <div class="max-w-5xl mx-auto px-6 text-center relative z-10">
+      <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/30 text-cyan-300 text-xs font-medium mb-8">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        <span>Built natively for Google Antigravity & Pair-Programming Agents</span>
+      </div>
+      
+      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight sm:leading-none mb-6">
+        The Autonomous Delivery Harness for <br>
+        <span class="gradient-text">AI Pair Programming</span>
+      </h1>
+      
+      <p class="text-lg sm:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed">
+        Stop letting AI agents sprint past architectural decisions. Enforce phase gates, cryptographic tamper-evidence, and strict human approvals on every line of code.
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+        <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-3 font-mono text-xs sm:text-sm text-cyan-300 shadow-inner">
+          <span class="text-slate-500 mr-2">$</span> uv tool install valdoz-protocol@3.0.0
+          <button onclick="navigator.clipboard.writeText('uv tool install valdoz-protocol@3.0.0'); alert('Copied to clipboard!')" class="ml-3 text-slate-400 hover:text-white transition" title="Copy command">
+            📋
+          </button>
+        </div>
+        <a href="#terminal" class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold text-sm text-slate-200 transition flex items-center space-x-2">
+          <span>Test in Live Simulator</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <!-- Quick Metrics Ribbon -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/60">
+        <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
+          <div class="text-2xl font-bold text-white">10 Phases</div>
+          <div class="text-xs text-slate-400 mt-1">Deterministic Delivery</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
+          <div class="text-2xl font-bold text-emerald-400">chmod 444</div>
+          <div class="text-xs text-slate-400 mt-1">Deliverable Write-Lock</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
+          <div class="text-2xl font-bold text-cyan-400">TTY Only</div>
+          <div class="text-xs text-slate-400 mt-1">Human-in-the-Loop Gate</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
+          <div class="text-2xl font-bold text-blue-400">0 regressions</div>
+          <div class="text-xs text-slate-400 mt-1">107 Automated Tests</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: What Does It Solve? (5 Fatal Traps) -->
+  <section id="problems" class="py-20 border-t border-slate-800/80 bg-slate-950/60">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2">The Unconstrained Agent Problem</h2>
+        <p class="text-3xl font-extrabold text-white">The 5 Fatal Traps of Autonomous Coding</p>
+        <p class="text-slate-400 mt-3 text-sm">Why unguided AI agents write fast code that self-destructs in production.</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <!-- Trap 1 -->
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition">
+          <div class="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center font-bold text-lg mb-4">
+            1
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">The "Phantom Done" Illusion</h3>
+          <p class="text-xs text-slate-400 leading-relaxed mb-4">
+            Agents declare tasks "completed" based on mental speculation rather than running real tests, leaving behind broken imports and failing suites.
+          </p>
+          <div class="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg p-2.5">
+            <strong>ValdoZ Fix:</strong> Verifies real test execution exit codes and test coverage deltas before allowing progression.
+          </div>
+        </div>
+
+        <!-- Trap 2 -->
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-lg mb-4">
+            2
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Architectural Drift</h3>
+          <p class="text-xs text-slate-400 leading-relaxed mb-4">
+            At step 40, an agent decides to rewrite your database schema or change dependencies without permission.
+          </p>
+          <div class="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg p-2.5">
+            <strong>ValdoZ Fix:</strong> Sets approved documents to <code class="text-xs">chmod 444</code> with SHA-256 hashes. Edits trigger immediate tamper alarms.
+          </div>
+        </div>
+
+        <!-- Trap 3 -->
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-lg mb-4">
+            3
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Multi-Agent Collisions</h3>
+          <p class="text-xs text-slate-400 leading-relaxed mb-4">
+            Concurrent subagents edit the same files simultaneously, causing merge conflicts, lost code, and race conditions.
+          </p>
+          <div class="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg p-2.5">
+            <strong>ValdoZ Fix:</strong> Builder vs. Scribe session locks enforced via Git pre-commit hooks.
+          </div>
+        </div>
+
+        <!-- Trap 4 -->
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center font-bold text-lg mb-4">
+            4
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Self-Approval Bypass</h3>
+          <p class="text-xs text-slate-400 leading-relaxed mb-4">
+            Unrestricted scripts pipe "yes" into prompts or write tests asserting `True` to bypass gates without human inspection.
+          </p>
+          <div class="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg p-2.5">
+            <strong>ValdoZ Fix:</strong> Rejects subshells and pipes. Approvals strictly require an interactive human terminal TTY.
+          </div>
+        </div>
+
+        <!-- Trap 5 -->
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition md:col-span-2">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center font-bold text-lg mb-4">
+            5
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">API Cost Blowouts in Long Agent Loops</h3>
+          <p class="text-xs text-slate-400 leading-relaxed mb-4">
+            Autonomous multi-step coding loops rack up hundreds of dollars in commercial API fees during development and test iteration.
+          </p>
+          <div class="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg p-2.5">
+            <strong>ValdoZ Fix:</strong> Native FreeLLMAPI launcher integration proxies 358 free LLM endpoints with zero commercial token burn.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Interactive 10-Phase Stepper -->
+  <section id="phases" class="py-20 border-t border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">The Delivery Lifecycle</h2>
+        <p class="text-3xl font-extrabold text-white">Interactive 10-Phase Stepper</p>
+        <p class="text-slate-400 mt-2 text-sm">Click any phase below to explore its deliverables, whitelisted commands, and gating checks.</p>
+      </div>
+
+      <!-- Phase Selector Pills -->
+      <div class="flex flex-wrap justify-center gap-2 mb-10" id="phase-pills">
+        <!-- Javascript renders pills here -->
+      </div>
+
+      <!-- Phase Detail Card -->
+      <div class="max-w-4xl mx-auto bg-slate-900/80 border border-slate-800 rounded-2xl p-8 shadow-xl" id="phase-card">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Live Terminal Simulator -->
+  <section id="terminal" class="py-20 border-t border-slate-800/80 bg-slate-950/80">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2">Developer Experience</h2>
+        <p class="text-3xl font-extrabold text-white">Live ValdoZ CLI Simulator</p>
+        <p class="text-slate-400 mt-2 text-sm">Click a command button below or type directly to see ValdoZ in action.</p>
+      </div>
+
+      <!-- Preset Command Buttons -->
+      <div class="flex flex-wrap justify-center gap-2 mb-6">
+        <button onclick="runCli('valdoz phase status')" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-cyan-300 transition">
+          valdoz phase status
+        </button>
+        <button onclick="runCli('valdoz gate check')" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-cyan-300 transition">
+          valdoz gate check
+        </button>
+        <button onclick="runCli('valdoz audit')" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-cyan-300 transition">
+          valdoz audit
+        </button>
+        <button onclick="runCli('valdoz pack list')" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-cyan-300 transition">
+          valdoz pack list
+        </button>
+        <button onclick="runCli('valdoz doctor')" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-cyan-300 transition">
+          valdoz doctor
+        </button>
+      </div>
+
+      <!-- Terminal Window -->
+      <div class="terminal-window rounded-2xl overflow-hidden font-mono text-xs sm:text-sm">
+        <div class="bg-slate-900/90 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+            <span class="ml-2 text-xs text-slate-400 font-sans">bash — valdoz interactive harness</span>
+          </div>
+          <span class="text-xs text-slate-500 font-sans">v3.0.0</span>
+        </div>
+        <div class="p-6 text-slate-300 space-y-3 min-h-[320px] max-h-[460px] overflow-y-auto" id="terminal-output">
+          <div class="text-slate-500"># Welcome to the ValdoZ Protocol CLI simulator.</div>
+          <div class="text-slate-500"># Click one of the buttons above to execute real ValdoZ command flows.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Target Personas -->
+  <section id="personas" class="py-20 border-t border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2">Audience</h2>
+        <p class="text-3xl font-extrabold text-white">Who Is ValdoZ Built For?</p>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-6">
+        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800">
+          <div class="text-2xl mb-3">🏢</div>
+          <h3 class="text-base font-bold text-white mb-2">Engineering Leads & CTOs</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Adopt AI coding across engineering teams without sacrificing security, architecture standards, or code review rigor.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800">
+          <div class="text-2xl mb-3">🤝</div>
+          <h3 class="text-base font-bold text-white mb-2">Client Agencies & Boutiques</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Provide transparent, milestone-gated deliverables in English or Arabic with cryptographic SHA-256 proof of work.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800">
+          <div class="text-2xl mb-3">🤖</div>
+          <h3 class="text-base font-bold text-white mb-2">Agent System Builders</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Harness multi-agent swarms with official Antigravity SDK tool schemas and zero-cost local LLM testing.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800">
+          <div class="text-2xl mb-3">🚀</div>
+          <h3 class="text-base font-bold text-white mb-2">Solo Founders & Builders</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Pair program with the discipline of a senior FAANG staff engineer guarding your repository against regressions.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Comparison Matrix -->
+  <section id="comparison" class="py-20 border-t border-slate-800/80 bg-slate-950/60">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Why ValdoZ</h2>
+        <p class="text-3xl font-extrabold text-white">How ValdoZ Compares</p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs sm:text-sm border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="py-4 px-4 font-semibold">Capability</th>
+              <th class="py-4 px-4 font-semibold text-cyan-400 bg-cyan-950/20 rounded-t-lg">ValdoZ Protocol v3.0</th>
+              <th class="py-4 px-4 font-semibold">Unconstrained AI Agents</th>
+              <th class="py-4 px-4 font-semibold">Traditional CI/CD</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            <tr>
+              <td class="py-4 px-4 font-medium">Phase-Gated Execution</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ 10 Enforced Phases</td>
+              <td class="py-4 px-4 text-slate-500">✗ Unstructured 1-shot</td>
+              <td class="py-4 px-4 text-slate-500">✗ Code-only post-commit</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Human Gatekeeper</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ Interactive TTY Only</td>
+              <td class="py-4 px-4 text-slate-500">✗ None (blind faith)</td>
+              <td class="py-4 px-4 text-yellow-400">⚠️ Manual PR review</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Deliverable Write-Protection</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ chmod 444 Locks</td>
+              <td class="py-4 px-4 text-slate-500">✗ Overwrites freely</td>
+              <td class="py-4 px-4 text-slate-500">✗ None</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Tamper Detection</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ SHA-256 Hash Tree</td>
+              <td class="py-4 px-4 text-slate-500">✗ None</td>
+              <td class="py-4 px-4 text-yellow-400">⚠️ Git tree only</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Role Domain Isolation</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ Builder vs Scribe Locks</td>
+              <td class="py-4 px-4 text-slate-500">✗ Race conditions</td>
+              <td class="py-4 px-4 text-slate-500">✗ N/A</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Marketplace Plugin Bridge</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ wshobson/agents (80+ packs)</td>
+              <td class="py-4 px-4 text-slate-500">✗ Vendor lock-in</td>
+              <td class="py-4 px-4 text-slate-500">✗ N/A</td>
+            </tr>
+            <tr>
+              <td class="py-4 px-4 font-medium">Zero-Cost Testing Proxy</td>
+              <td class="py-4 px-4 font-bold text-emerald-400 bg-cyan-950/10">✓ FreeLLMAPI (358 models)</td>
+              <td class="py-4 px-4 text-slate-500">✗ Cost drain</td>
+              <td class="py-4 px-4 text-slate-500">✗ N/A</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Quickstart -->
+  <section id="quickstart" class="py-20 border-t border-slate-800/80">
+    <div class="max-w-4xl mx-auto px-6 text-center">
+      <h2 class="text-3xl font-extrabold text-white mb-4">Start Pair Programming with Discipline Today</h2>
+      <p class="text-slate-400 text-sm max-w-xl mx-auto mb-8">Install the ValdoZ Protocol CLI in seconds using uv.</p>
+      
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-left font-mono text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto mb-8 shadow-xl">
+        <div class="text-slate-500 mb-2"># 1. Install ValdoZ</div>
+        <div class="text-cyan-300 mb-4">$ uv tool install valdoz-protocol@3.0.0</div>
+
+        <div class="text-slate-500 mb-2"># 2. Initialize in your project repo</div>
+        <div class="text-cyan-300 mb-4">$ valdoz project init --name "My Next Project"</div>
+
+        <div class="text-slate-500 mb-2"># 3. Synchronize Antigravity playbooks & git hooks</div>
+        <div class="text-cyan-300 mb-4">$ valdoz sync-runtimes && valdoz hook install</div>
+
+        <div class="text-slate-500 mb-2"># 4. Check active phase and deliverables</div>
+        <div class="text-emerald-400">$ valdoz phase status</div>
+      </div>
+
+      <div class="flex items-center justify-center space-x-4">
+        <a href="https://github.com/akhalil/valdoz" target="_blank" class="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-semibold text-sm hover:opacity-95 shadow-lg shadow-cyan-500/20 transition">
+          View on GitHub
+        </a>
+        <a href="../USER_GUIDE.md" class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-sm transition">
+          Read Full User Guide
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 py-8 bg-[#070a12] text-xs text-slate-500 text-center">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>ValdoZ Protocol v3.0 — Open Source Autonomous Engineering Harness.</div>
+      <div class="flex items-center space-x-6">
+        <a href="../USER_GUIDE.md" class="hover:text-slate-400">User Guide</a>
+        <a href="../MIGRATION.md" class="hover:text-slate-400">Migration</a>
+        <a href="https://github.com/akhalil/valdoz" class="hover:text-slate-400">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Interactive Scripts -->
+  <script>
+    const phasesData = [
+      { num: 0, name: "Init", desc: "Repository bootstrapping, language selection (English/Arabic), state.json creation.", deliverable: "state.json", whitelist: "valdoz project init, git init", checks: "Valid JSON schema, permissions" },
+      { num: 1, name: "Intake", desc: "Client interviews, project framing, problem definition, non-goals.", deliverable: "docs/01-intake.md", whitelist: "valdoz research log, valdoz research fetch", checks: "No TODO/TBD, URLs pre-logged" },
+      { num: 2, name: "Requirements", desc: "Acceptance criteria, user stories, boundary conditions, performance targets.", deliverable: "docs/02-requirements.md", whitelist: "valdoz decision add", checks: "All required headings present" },
+      { num: 3, name: "Stack Decision", desc: "Technology stack selection, architectural trade-offs, constraints evaluation.", deliverable: "docs/03-stack.md", whitelist: "valdoz decision add", checks: "Citations verified, no unlogged URLs" },
+      { num: 4, name: "Architecture & Plan", desc: "System diagrams, data schemas, API contracts, Phase 6 slice breakdown.", deliverable: "docs/04-architecture.md", whitelist: "valdoz slice start", checks: "Mermaid syntax valid, slice manifest" },
+      { num: 5, name: "Project Setup", desc: "Dependencies, linter configs, Docker setup, and CI skeletons.", deliverable: "docs/05-setup.md", whitelist: "uv, npm, cargo, docker", checks: "Lockfile present and committed" },
+      { num: 6, name: "Build Slices", desc: "Test-Driven Development (TDD) vertical slices. open -> built -> gated -> approved.", deliverable: "src/, tests/, docs/slices/", whitelist: "pytest, npm test, valdoz slice done", checks: "Three Slice Gate Conditions verified" },
+      { num: 7, name: "Verify", desc: "Universal audit: secrets scan, lockfile drift, undeclared import detection.", deliverable: "docs/07-verify.md", whitelist: "valdoz audit --strict", checks: "Zero blocking audit failures" },
+      { num: 8, name: "Deploy", desc: "Cloud infrastructure provisioning, staging validation, production rollout.", deliverable: "docs/08-deploy.md", whitelist: "terraform, kubectl, aws", checks: "Cloud rollback guardrail confirmation" },
+      { num: 9, name: "Handover", desc: "Operational runbooks, credential transfer instructions, final sign-off.", deliverable: "docs/09-handover.md", whitelist: "valdoz phase approve", checks: "All 10 deliverables write-protected" },
+      { num: 10, name: "Change Requests", desc: "Controlled post-delivery changes and scope alterations without history tampering.", deliverable: "docs/changes/CR-*.md", whitelist: "valdoz phase reopen", checks: "Impact analysis complete" }
+    ];
+
+    let currentPhase = 0;
+
+    function renderPhaseStepper() {
+      const pillsContainer = document.getElementById('phase-pills');
+      pillsContainer.innerHTML = '';
+      phasesData.forEach((p, idx) => {
+        const btn = document.createElement('button');
+        const isActive = idx === currentPhase;
+        btn.className = `px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+          isActive 
+            ? 'phase-badge-active shadow-md shadow-blue-500/20' 
+            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+        }`;
+        btn.innerText = `P${p.num}: ${p.name}`;
+        btn.onclick = () => { currentPhase = idx; renderPhaseStepper(); };
+        pillsContainer.appendChild(btn);
+      });
+
+      const p = phasesData[currentPhase];
+      const card = document.getElementById('phase-card');
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center space-x-3">
+            <span class="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-400 font-bold flex items-center justify-center text-sm">
+              ${p.num}
+            </span>
+            <h3 class="text-xl font-bold text-white">Phase ${p.num}: ${p.name}</h3>
+          </div>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30 font-medium">Gated Lifecycle</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-6 leading-relaxed">${p.desc}</p>
+        <div class="grid sm:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+            <div class="text-slate-500 font-semibold mb-1 uppercase tracking-wider text-[11px]">Primary Deliverable</div>
+            <div class="font-mono text-cyan-300">${p.deliverable}</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+            <div class="text-slate-500 font-semibold mb-1 uppercase tracking-wider text-[11px]">Permitted Commands</div>
+            <div class="font-mono text-slate-300 truncate">${p.whitelist}</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+            <div class="text-slate-500 font-semibold mb-1 uppercase tracking-wider text-[11px]">Gate Conditions</div>
+            <div class="text-emerald-400">${p.checks}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    const cliResponses = {
+      'valdoz phase status': `
+<span class="text-cyan-400 font-bold">Project: demo-portal (Phase 6: Build Slices)</span>
+┌─────────┬──────────────────────┬─────────────┬──────────────┬───────────┐
+│ Phase # │ Phase Name           │ Status      │ Approved By  │ Integrity │
+├─────────┼──────────────────────┼─────────────┼──────────────┼───────────┤
+│    0    │ Init                 │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    1    │ Intake               │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    2    │ Requirements         │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    3    │ Stack Decision       │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    4    │ Architecture & Plan  │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    5    │ Project Setup        │ <span class="text-green-400">approved</span>    │ human-lead   │   <span class="text-green-400">VALID</span>   │
+│    6    │ Build Slices         │ <span class="text-yellow-400">in_progress</span> │ -            │     -     │
+└─────────┴──────────────────────┴─────────────┴──────────────┴───────────┘
+<span class="text-slate-400">State write protection:</span> <span class="text-green-400">LOCKED (chmod 444)</span>`,
+
+      'valdoz gate check': `
+<span class="text-cyan-400 font-bold">Gate Check: Phase 6 (Build Slices)</span>
+┌─────────────┬────────────────────────────────────┬──────────┬────────┬─────────────────────────┐
+│ Check ID    │ Description                        │ Severity │ Result │ Message                 │
+├─────────────┼────────────────────────────────────┼──────────┼────────┼─────────────────────────┤
+│ deliv-exist │ Deliverable files present          │ blocking │  <span class="text-green-400 font-bold">PASS</span>  │ All files exist         │
+│ no-placehld │ Check TODO/TBD/lorem ipsum         │ blocking │  <span class="text-green-400 font-bold">PASS</span>  │ Clean of placeholders   │
+│ slice-gates │ Three Slice Gate Conditions        │ blocking │  <span class="text-green-400 font-bold">PASS</span>  │ Tests pass, cov delta=0 │
+│ integrity   │ Cryptographic SHA-256 deliverable  │ blocking │  <span class="text-green-400 font-bold">PASS</span>  │ Deliverables unmodified │
+└─────────────┴────────────────────────────────────┴──────────┴────────┴─────────────────────────┘
+<span class="text-green-400 font-bold">✓ Phase 6 Gate Passed! Ready for human approval.</span>`,
+
+      'valdoz audit': `
+<span class="text-cyan-400 font-bold">ValdoZ Universal Audit</span>
+┌──────────────┬────────────────────────────────┬──────────┬─────────┬────────┬────────────────────────────┐
+│ Check ID     │ Description                    │ Severity │ Status  │ Result │ Message                    │
+├──────────────┼────────────────────────────────┼──────────┼─────────┼────────┼────────────────────────────┤
+│ secrets-scan │ Scan for hardcoded credentials │ blocking │ scanned │  <span class="text-green-400 font-bold">PASS</span>  │ No secrets detected        │
+│ lockfile-chk │ Committed dependency lockfiles │ blocking │ scanned │  <span class="text-green-400 font-bold">PASS</span>  │ uv.lock clean and pinned   │
+│ imports-chk  │ Undeclared module imports      │ blocking │ scanned │  <span class="text-green-400 font-bold">PASS</span>  │ All 14 packages declared   │
+└──────────────┴────────────────────────────────┴──────────┴─────────┴────────┴────────────────────────────┘
+<span class="text-green-400 font-bold">✓ ValdoZ Audit Passed!</span> (Zero blocking vulnerabilities)`,
+
+      'valdoz pack list': `
+<span class="text-cyan-400 font-bold">Available Stack & Project Packs</span>
+┌─────────────────────┬───────────────────┬─────────┬────────┬───────────────────────────────────────────┐
+│ Pack ID             │ Name              │ Version │ Active │ Description                               │
+├─────────────────────┼───────────────────┼─────────┼────────┼───────────────────────────────────────────┤
+│ base                │ Base Engineering  │  1.0.0  │  <span class="text-green-400 font-bold">YES</span>   │ Fundamental engineering disciplines       │
+│ web-app             │ Web Application   │  1.0.0  │  <span class="text-green-400 font-bold">YES</span>   │ Frontend / fullstack application pack     │
+│ api                 │ REST/GraphQL API  │  1.0.0  │   <span class="text-slate-500">NO</span>   │ Backend microservices and API checks      │
+│ wshobson-code-rev   │ Code Reviewer     │  1.0.0  │  <span class="text-green-400 font-bold">YES</span>   │ Imported from wshobson/agents marketplace │
+└─────────────────────┴───────────────────┴─────────┴────────┴───────────────────────────────────────────┘`,
+
+      'valdoz doctor': `
+<span class="text-cyan-400 font-bold">ValdoZ Diagnostics & Health</span>
+  [✓] Virtual environment: Active (/home/akhalil/valdoz/.venv)
+  [✓] Python drift: Safe (Pinned 3.14.8 == Runtime 3.14.8)
+  [✓] State file: Write-protected (chmod 444)
+  [✓] Google Antigravity SDK: v0.1.22 active
+  [✓] Research staleness: 0 citations older than 180 days
+<span class="text-green-400 font-bold">✓ System healthy. No drifts or tampering detected.</span>`
+    };
+
+    function runCli(cmd) {
+      const term = document.getElementById('terminal-output');
+      const res = cliResponses[cmd] || `<span class="text-red-400">Command not found: ${cmd}</span>`;
+      term.innerHTML += `
+        <div class="pt-2"><span class="text-slate-500">$</span> <span class="text-cyan-300 font-bold">${cmd}</span></div>
+        <div class="leading-relaxed overflow-x-auto">${res}</div>
+      `;
+      term.scrollTop = term.scrollHeight;
+    }
+
+    renderPhaseStepper();
+  </script>
+</body>
+</html>

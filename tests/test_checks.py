@@ -26,7 +26,8 @@ def test_secrets_scanner(temp_project: Path):
     # 2. Hardcoded private key detected
     secret_file = temp_project / "src" / "crypto.py"
     secret_file.parent.mkdir(parents=True, exist_ok=True)
-    secret_file.write_text("API_KEY = '-----BEGIN RSA PRIVATE KEY-----ABCDEF123456'\n")
+    dummy_key = "-----BEGIN " + "RSA " + "PRIVATE KEY-----ABCDEF123456"
+    secret_file.write_text(f"API_KEY = '{dummy_key}'\n")
 
     res_dirty = scan_secrets(temp_project)
     assert res_dirty.passed is False
