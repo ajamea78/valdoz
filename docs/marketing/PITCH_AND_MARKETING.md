@@ -109,8 +109,9 @@ Instead of letting an agent write an entire app at once:
 ## 2-Minute Quickstart
 
 ```bash
-# 1. Install ValdoZ
-uv tool install valdoz-protocol@3.0.0
+# 1. Install ValdoZ globally via uv tool (from local source or repo):
+uv tool install --editable /home/akhalil/valdoz --force
+# (Or from PyPI once published: uv tool install valdoz-protocol@3.0.0)
 
 # 2. Initialize in your project
 cd my-project

@@ -37,14 +37,31 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 ## 2. Quick Setup (2-Minute Onboarding)
 
 ### Installation
-ValdoZ is installed via `uv`:
-```bash
-# In your terminal:
-curl -Lsf https://astral.sh/uv/install.sh | sh
-uv tool install valdoz-protocol@3.0.0
+ValdoZ is installed via `uv tool`:
 
-# Verify installation:
+#### For Local Development / Source Installation:
+```bash
+# Install directly from the local repository:
+uv tool install --editable /home/akhalil/valdoz --force
+
+# Or from inside the cloned repo directory:
+uv tool install --editable . --force
+```
+
+#### From GitHub:
+```bash
+uv tool install git+https://github.com/akhalil/valdoz.git --force
+```
+
+#### From PyPI Registry (Once Published):
+```bash
+uv tool install valdoz-protocol@3.0.0
+```
+
+Verify your installation:
+```bash
 valdoz --version
+# Output: ValdoZ Protocol version 3.0.0
 ```
 
 ### Initializing a Project
