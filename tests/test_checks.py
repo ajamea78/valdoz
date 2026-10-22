@@ -33,7 +33,7 @@ def test_secrets_scanner(temp_project: Path):
     assert res_dirty.passed is False
     assert "Private Key" in res_dirty.message
 
-    # 3. .env file detected
+    # 3. .env file detected without .gitignore -> fails
     secret_file.unlink()
     env_file = temp_project / ".env"
     env_file.write_text("DATABASE_URL=postgres://user:pass@localhost/db\n")
@@ -41,6 +41,12 @@ def test_secrets_scanner(temp_project: Path):
     res_env = scan_secrets(temp_project)
     assert res_env.passed is False
     assert ".env" in res_env.message
+
+    # 4. .env file ignored in .gitignore -> passes
+    gitignore = temp_project / ".gitignore"
+    gitignore.write_text(".env\n")
+    res_env_ignored = scan_secrets(temp_project)
+    assert res_env_ignored.passed is True
 
 
 def test_lockfile_scanner(temp_project: Path):

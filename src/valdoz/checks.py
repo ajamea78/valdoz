@@ -71,15 +71,60 @@ def scan_secrets(project_root: Path) -> AuditCheckResult:
     """Scans repository files for committed secrets and API keys."""
     violations: List[str] = []
 
-    # Check for uncommitted/committed .env file
+    # Check .env handling
     env_file = project_root / ".env"
+    env_is_safely_ignored = False
     if env_file.exists():
-        violations.append("Found '.env' file in repository root. Ensure credentials are not committed.")
+        git_dir = project_root / ".git"
+        tracked = False
+        ignored = False
+        if git_dir.exists():
+            try:
+                res_ls = subprocess.run(
+                    ["git", "ls-files", ".env"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res_ls.stdout.strip():
+                    tracked = True
 
-    # Walk files in project excluding virtual environments and node_modules
+                res_ign = subprocess.run(
+                    ["git", "check-ignore", "-q", ".env"],
+                    cwd=project_root,
+                    capture_output=True,
+                    check=False,
+                )
+                if res_ign.returncode == 0:
+                    ignored = True
+            except Exception:
+                pass
+
+        if not ignored:
+            gitignore = project_root / ".gitignore"
+            if gitignore.exists():
+                try:
+                    for line in gitignore.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        if line.strip() in (".env", "*.env", ".env*", "/.env"):
+                            ignored = True
+                            break
+                except Exception:
+                    pass
+
+        if tracked:
+            violations.append("'.env' file is tracked in git index! Untrack it with 'git rm --cached .env'.")
+        elif not ignored:
+            violations.append("Found '.env' in repository root, but it is not ignored in .gitignore. Add '.env' to .gitignore to prevent accidental commits.")
+        else:
+            env_is_safely_ignored = True
+
+    # Walk files in project excluding virtual environments, node_modules, and ignored .env
     skip_dirs = {".git", ".venv", "node_modules", "dist", "build", ".valdoz-archive", ".pytest_cache"}
     for p in project_root.rglob("*"):
         if any(part in p.parts for part in skip_dirs):
+            continue
+        if env_is_safely_ignored and p == env_file:
             continue
         if p.is_file() and p.suffix in (".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".md", ".env"):
             try:
