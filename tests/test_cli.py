@@ -173,4 +173,23 @@ def test_cli_pack_commands(run_in_tmp: Path):
     assert "Enabled pack 'web-app'" in res_add.output
 
 
+def test_cli_hook_and_ci(run_in_tmp: Path):
+    import subprocess
+    subprocess.run(["git", "init"], cwd=str(run_in_tmp), check=True, stdout=subprocess.DEVNULL)
+    runner.invoke(app, ["project", "init", "--name", "integration-cli-test"])
+
+    # Hook install
+    res_hook = runner.invoke(app, ["hook", "install"])
+    assert res_hook.exit_code == 0
+    assert "Pre-commit hook installed successfully" in res_hook.output
+    assert (run_in_tmp / ".git" / "hooks" / "pre-commit").exists()
+
+    # CI generate
+    res_ci = runner.invoke(app, ["ci", "generate"])
+    assert res_ci.exit_code == 0
+    assert "GitHub Actions CI workflow generated" in res_ci.output
+    assert (run_in_tmp / ".github" / "workflows" / "valdoz.yml").exists()
+
+
+
 

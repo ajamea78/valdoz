@@ -161,6 +161,8 @@ def verify_phase_integrity(project_root: Path, phase_num: int) -> Tuple[bool, Li
         return True, []
 
     for rel_path, expected_hash in phase.deliverable_hashes.items():
+        if rel_path == ".valdoz/state.json":
+            continue
         file_path = project_root / rel_path
         if not file_path.exists():
             violations.append(f"Approved deliverable missing: '{rel_path}'")

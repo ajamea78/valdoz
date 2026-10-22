@@ -75,6 +75,8 @@ state_app = typer.Typer(name="state", help="State inspection and repair", no_arg
 gate_app = typer.Typer(name="gate", help="Gate verification engine", no_args_is_help=True)
 slice_app = typer.Typer(name="slice", help="Phase 6 slice governance", no_args_is_help=True)
 pack_app = typer.Typer(name="pack", help="Stack and project-type packs", no_args_is_help=True)
+hook_app = typer.Typer(name="hook", help="Git hook management", no_args_is_help=True)
+ci_app = typer.Typer(name="ci", help="CI workflow management", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -85,6 +87,8 @@ app.add_typer(state_app)
 app.add_typer(gate_app)
 app.add_typer(slice_app)
 app.add_typer(pack_app)
+app.add_typer(hook_app)
+app.add_typer(ci_app)
 
 
 def find_project_root() -> Path:
@@ -708,6 +712,35 @@ def pack_add_cmd(
     state.packs.append(pid)
     save_state(root, state)
     console.print(f"[bold green]Enabled pack '{pid}' ({BUILTIN_PACKS[pid].name})![/bold green]")
+
+
+# ── Hook Commands ───────────────────────────────────────────────────────────
+@hook_app.command("install")
+def hook_install_cmd():
+    """Installs the ValdoZ pre-commit hook into .git/hooks/pre-commit."""
+    root = find_project_root()
+    from valdoz.integration import install_git_hook
+    try:
+        hook_path = install_git_hook(root)
+        console.print(f"[bold green]Pre-commit hook installed successfully at:[/bold green] [cyan]{hook_path}[/cyan]")
+        console.print("Enforces: role domain separation (builder vs scribe), gate checks, and audit.")
+    except Exception as e:
+        console.print(f"[bold red]Hook installation failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+# ── CI Commands ─────────────────────────────────────────────────────────────
+@ci_app.command("generate")
+def ci_generate_cmd():
+    """Generates the GitHub Actions CI workflow template at .github/workflows/valdoz.yml."""
+    root = find_project_root()
+    from valdoz.integration import install_ci_workflow
+    try:
+        wf_path = install_ci_workflow(root)
+        console.print(f"[bold green]GitHub Actions CI workflow generated at:[/bold green] [cyan]{wf_path}[/cyan]")
+    except Exception as e:
+        console.print(f"[bold red]CI generation failed:[/bold red] {e}")
+        raise typer.Exit(1)
 
 
 # ── Doctor Command ──────────────────────────────────────────────────────────
