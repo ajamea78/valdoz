@@ -8,11 +8,11 @@
 1. [What is ValdoZ? (The 30-Second Mental Model)](#1-what-is-valdoz-the-30-second-mental-model)
 2. [Quick Setup & Intelligent Project Initialization](#2-quick-setup--intelligent-project-initialization)
 3. [The Core Concept: Builder & Scribe Roles](#3-the-core-concept-builder--scribe-roles)
-4. [The 10 Project Phases (Cheat Sheet)](#4-the-10-project-phases-cheat-sheet)
-5. [The Daily Workflow (Step-by-Step)](#5-the-daily-workflow-step-by-step)
+4. [The 11 Lifecycle Phases (Phase 0–10 Cheat Sheet)](#4-the-11-lifecycle-phases-phase-010-cheat-sheet)
+5. [Daily Operating Loop: Step-by-Step](#5-daily-operating-loop-step-by-step)
 6. [Phase 6: Mastering Build Slices](#6-phase-6-mastering-build-slices)
 7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene--automated-remediation)
-8. [Stack Packs, Ecosystem Plugins & SDK Agents](#8-stack-packs-ecosystem-plugins--sdk-agents)
+8. [Stack Packs & Ecosystem Marketplace Plugins](#8-stack-packs--ecosystem-marketplace-plugins)
 9. [100% In-Antigravity Native Management (Zero Terminal Switching)](#9-100-in-antigravity-native-management-zero-terminal-switching)
 10. [Autonomous Self-Healing Engine (CI/CD & Local Gates)](#10-autonomous-self-healing-engine-cicd--local-gates)
 11. [Emergency Recovery & Troubleshooting](#11-emergency-recovery--troubleshooting)
@@ -29,7 +29,7 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 - They can bypass safety gates by running arbitrary terminal commands.
 
 **ValdoZ Protocol** is the discipline harness. It acts as an experienced Tech Lead standing next to the agent:
-1. **Phase-Gated Delivery**: The agent cannot jump ahead. Work progresses through 10 ordered phases (Intake $\rightarrow$ Requirements $\rightarrow$ Stack $\rightarrow$ Architecture $\rightarrow$ Setup $\rightarrow$ Build Slices $\rightarrow$ Verify $\rightarrow$ Deploy $\rightarrow$ Handover).
+1. **Phase-Gated Delivery**: The agent cannot jump ahead. Work progresses through 11 ordered phases (Phase 0: Init $\rightarrow$ Intake $\rightarrow$ Requirements $\rightarrow$ Stack $\rightarrow$ Architecture $\rightarrow$ Setup $\rightarrow$ Build Slices $\rightarrow$ Verify $\rightarrow$ Deploy $\rightarrow$ Handover $\rightarrow$ Phase 10: Changes).
 2. **Evidence Over Claims**: "Done" means actual commands ran, tests passed, and deliverables exist with no placeholders (`TODO`, `TBD`).
 3. **Human Gatekeeper**: At the end of every phase, the agent stops cold. Only **you** (an interactive human terminal) can approve work. The agent cannot approve its own code.
 4. **Tamper-Proof State**: Approved deliverables are cryptographically hashed (SHA-256) and `state.json` is write-protected (`chmod 444`). If files are silently edited later, gates fail immediately.
@@ -200,7 +200,7 @@ ValdoZ locks `.valdoz/session.lock`. Two builders cannot conflict on the same re
 
 ---
 
-## 4. The 10 Project Phases (Cheat Sheet)
+## 4. The 11 Lifecycle Phases (Phase 0–10 Cheat Sheet)
 
 | Phase | Name | What Happens | What You Deliver |
 |---|---|---|---|
@@ -421,7 +421,9 @@ This writes the tool configuration to `~/.gemini/config/mcp_config.json`. Antigr
 - `valdoz_run_audit`: Runs code audits with optional `--fix` auto-remediation directly in chat.
 - `valdoz_check_gates`: Verifies deliverable completeness and absence of placeholders.
 - `valdoz_slice_ops`: Starts, completes, and tracks Phase 6 TDD build slices.
-- `valdoz_request_human_approval`: Generates an in-chat interactive human gate prompt.
+- `valdoz_request_human_approval`: Generates an in-chat interactive human gate prompt and issues a human token.
+- `valdoz_approve_with_human_token`: Submits cryptographically verified human token to approve phases.
+- `valdoz_heal`: Triggers autonomous AI diagnosis and remediation for failed gates, audits, slices, or CI.
 
 ### The In-Chat Human Approval Bridge
 Historically, gates required an interactive terminal (`sys.stdin.isatty()`) to prevent automated AI self-approval. 
@@ -485,7 +487,7 @@ valdoz ci generate --self-healing
 ```
 When generated with `--self-healing`, the workflow includes a dedicated `self-heal` job that executes automatically if `valdoz-gate` fails:
 - Fetches the failure logs from the GitHub Actions run.
-- Runs `valdoz audit --fix` and `valdoz heal gate`.
+- Runs `valdoz audit --fix` and `valdoz heal ci --log-file .valdoz/ci-logs/failure.txt`.
 - Automatically opens a **Pull Request** (`fix/valdoz-auto-heal-<run_id>`) containing the fix and root-cause analysis for team review!
 
 ---

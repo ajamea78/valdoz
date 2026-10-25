@@ -46,10 +46,14 @@ This document describes how to migrate an existing repository governed by ValdoZ
 
 ### Step 1: Install ValdoZ v3.0
 ```bash
-uv tool install valdoz-protocol@3.0.0
-# Or for local development:
-source .venv/bin/activate
-pip install -e .
+# From local repository source:
+uv tool install --editable . --force
+
+# Or standard global install:
+uv tool install . --force
+
+# Or with pipx / virtualenv:
+pipx install .
 ```
 
 ### Step 2: Initialize v3.0 State

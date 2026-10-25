@@ -94,3 +94,7 @@ class FreeLLMAPIConfig(BaseModel):
 def generate_freellmapi_config(base_url: str = "http://localhost:8000/v1") -> FreeLLMAPIConfig:
     """Generates FreeLLMAPI connection configuration for local testing."""
     return FreeLLMAPIConfig(base_url=base_url)
+
+
+# Alias for backwards compatibility with documentation and external scripts
+get_freellmapi_config = generate_freellmapi_config
