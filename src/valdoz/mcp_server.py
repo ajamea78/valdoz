@@ -126,6 +126,30 @@ VALDOZ_TOOLS = [
             "required": ["phase_num", "human_token"],
         },
     },
+    {
+        "name": "valdoz_heal",
+        "description": "Autonomous AI diagnosis and remediation for failed gates, audits, or Phase 6 slices.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "enum": ["gate", "audit", "slice"],
+                    "description": "Failure type to heal.",
+                },
+                "slice_id": {
+                    "type": "string",
+                    "description": "Slice identifier if healing a slice (e.g., '01-auth').",
+                },
+                "retries": {
+                    "type": "integer",
+                    "description": "Max remediation attempts.",
+                    "default": 3,
+                },
+            },
+            "required": ["target"],
+        },
+    },
 ]
 
 
@@ -270,6 +294,45 @@ def handle_approve_with_token(
     }
 
 
+def handle_heal_tool(
+    root: Path,
+    target: str,
+    slice_id: Optional[str] = None,
+    retries: int = 3,
+) -> Dict[str, Any]:
+    from valdoz.healing import collect_failure_context, run_healing_loop
+    error_output = ""
+    if target == "audit":
+        from valdoz.checks import run_valdoz_audit
+        rep = run_valdoz_audit(root, strict=True)
+        if rep.passed:
+            return {"status": "skipped", "message": "Audit is already passing."}
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+    elif target == "gate":
+        from valdoz.gates import run_phase_gate_checks
+        rep = run_phase_gate_checks(root)
+        if rep.passed:
+            return {"status": "skipped", "message": "Gate is already passing."}
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+    elif target == "slice":
+        error_output = f"Slice {slice_id} verification failed."
+
+    ctx = collect_failure_context(
+        root,
+        failure_type=f"{target}_check" if target != "audit" else "audit",
+        error_output=error_output,
+        slice_id=slice_id,
+    )
+    report = run_healing_loop(root, ctx, max_retries=retries)
+    return {
+        "success": report.success,
+        "attempts": report.attempt_count,
+        "root_cause": report.root_cause,
+        "applied_files": report.applied_files,
+        "summary": report.human_review_summary,
+    }
+
+
 # ── MCP Dispatcher ─────────────────────────────────────────────────────────
 
 def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict[str, Any]:
@@ -294,6 +357,13 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             phase_num=arguments["phase_num"],
             human_token=arguments["human_token"],
             confirmation=arguments.get("confirmation"),
+        )
+    elif tool_name == "valdoz_heal":
+        return handle_heal_tool(
+            root,
+            target=arguments.get("target", "gate"),
+            slice_id=arguments.get("slice_id"),
+            retries=arguments.get("retries", 3),
         )
     return {"error": f"Unknown tool: {tool_name}"}
 

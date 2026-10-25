@@ -658,6 +658,8 @@ def slice_start_cmd(
 def slice_done_cmd(
     slice_id: str = typer.Argument(..., help="Slice identifier"),
     cov_delta: float = typer.Option(0.0, "--cov-delta", help="Test coverage delta percentage"),
+    auto_heal: bool = typer.Option(False, "--auto-heal", help="Trigger autonomous self-healing on failure"),
+    retries: int = typer.Option(3, "--retries", help="Max healing attempts"),
 ):
     """Closes a slice with test evidence, evaluating the Three Slice Gate Conditions."""
     root = find_project_root()
@@ -668,6 +670,17 @@ def slice_done_cmd(
         console.print("Three Slice Gate Conditions verified: pre-existing tests pass, new tests pass, coverage maintained.")
     except SliceGateConditionError as e:
         console.print(f"[bold red]Slice Gate Condition Failure:[/bold red] {e}")
+        if auto_heal:
+            console.print("\n[bold cyan]🔧 Triggering ValdoZ Autonomous Self-Healing Engine...[/bold cyan]")
+            from valdoz.healing import collect_failure_context, run_healing_loop
+            ctx = collect_failure_context(root, failure_type="slice_gate", error_output=str(e), slice_id=slice_id)
+            report = run_healing_loop(root, ctx, max_retries=retries)
+            if report.success:
+                console.print(f"[bold green]✓ {report.human_review_summary}[/bold green]")
+                console.print(f"Applied fixes to: {', '.join(report.applied_files)}")
+                return
+            else:
+                console.print(f"[bold red]✗ Self-healing exhausted:[/bold red] {report.root_cause}")
         raise typer.Exit(1)
     except SliceError as e:
         console.print(f"[bold red]Slice Error:[/bold red] {e}")
@@ -892,15 +905,74 @@ def hook_install_cmd():
 
 # ── CI Commands ─────────────────────────────────────────────────────────────
 @ci_app.command("generate")
-def ci_generate_cmd():
+def ci_generate_cmd(
+    self_healing: bool = typer.Option(False, "--self-healing", help="Include autonomous self-healing failure recovery job in GitHub Actions"),
+):
     """Generates the GitHub Actions CI workflow template at .github/workflows/valdoz.yml."""
     root = find_project_root()
     from valdoz.integration import install_ci_workflow
     try:
-        wf_path = install_ci_workflow(root)
+        wf_path = install_ci_workflow(root, self_healing=self_healing)
         console.print(f"[bold green]GitHub Actions CI workflow generated at:[/bold green] [cyan]{wf_path}[/cyan]")
+        if self_healing:
+            console.print("[cyan]Self-healing CI enabled:[/cyan] CI failures will auto-diagnose and open a remediation PR.")
     except Exception as e:
         console.print(f"[bold red]CI generation failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+# ── Heal Command ────────────────────────────────────────────────────────────
+@app.command("heal")
+def heal_cmd(
+    target: str = typer.Argument("gate", help="Target failure to heal: 'gate', 'audit', or 'slice'"),
+    slice_id: Optional[str] = typer.Option(None, "--slice-id", "-s", help="Slice identifier if healing a slice"),
+    retries: int = typer.Option(3, "--retries", "-r", help="Maximum autonomous remediation iterations"),
+):
+    """Runs autonomous AI diagnosis and self-healing for failed gates, audits, or slices."""
+    root = find_project_root()
+    from valdoz.healing import collect_failure_context, run_healing_loop
+
+    console.print(f"[bold cyan]🔍 Inspecting failure state for healing target: [bold white]{target}[/bold white]...[/bold cyan]")
+    error_output = ""
+
+    if target == "audit":
+        from valdoz.checks import run_valdoz_audit
+        rep = run_valdoz_audit(root, strict=True)
+        if rep.passed:
+            console.print("[green]✓ Audit is already passing! No healing needed.[/green]")
+            return
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+    elif target == "gate":
+        from valdoz.gates import run_phase_gate_checks
+        rep = run_phase_gate_checks(root)
+        if rep.passed:
+            console.print(f"[green]✓ Phase {rep.phase} gate is already passing! No healing needed.[/green]")
+            return
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+    elif target == "slice":
+        if not slice_id:
+            console.print("[red]Error: --slice-id is required when healing a slice.[/red]")
+            raise typer.Exit(1)
+        error_output = f"Slice {slice_id} failed gate conditions or unit tests."
+    else:
+        console.print(f"[red]Unknown healing target '{target}'. Use 'gate', 'audit', or 'slice'.[/red]")
+        raise typer.Exit(1)
+
+    ctx = collect_failure_context(
+        root,
+        failure_type=f"{target}_check" if target != "audit" else "audit",
+        error_output=error_output,
+        slice_id=slice_id,
+    )
+    report = run_healing_loop(root, ctx, max_retries=retries)
+
+    if report.success:
+        console.print(f"\n[bold green]✓ {report.human_review_summary}[/bold green]")
+        if report.patch_diff:
+            console.print(f"\n[dim]{report.patch_diff}[/dim]")
+    else:
+        console.print(f"\n[bold red]✗ Self-Healing Incomplete:[/bold red] {report.root_cause}")
+        console.print(f"[yellow]Attempted {report.attempt_count} revision(s). Manual intervention required.[/yellow]")
         raise typer.Exit(1)
 
 

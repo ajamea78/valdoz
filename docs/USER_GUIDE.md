@@ -14,8 +14,9 @@
 7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene--automated-remediation)
 8. [Stack Packs, Ecosystem Plugins & SDK Agents](#8-stack-packs-ecosystem-plugins--sdk-agents)
 9. [100% In-Antigravity Native Management (Zero Terminal Switching)](#9-100-in-antigravity-native-management-zero-terminal-switching)
-10. [Emergency Recovery & Troubleshooting](#10-emergency-recovery--troubleshooting)
-11. [Complete CLI Command Reference](#11-complete-cli-command-reference)
+10. [Autonomous Self-Healing Engine (CI/CD & Local Gates)](#10-autonomous-self-healing-engine-cicd--local-gates)
+11. [Emergency Recovery & Troubleshooting](#11-emergency-recovery--troubleshooting)
+12. [Complete CLI Command Reference](#12-complete-cli-command-reference)
 
 ---
 
@@ -396,7 +397,49 @@ This renders:
 
 ---
 
-## 10. Emergency Recovery & Troubleshooting
+## 10. Autonomous Self-Healing Engine (CI/CD & Local Gates)
+
+Inspired by the freeCodeCamp course *Build a Self-Healing CI/CD Pipeline with AI*, ValdoZ Protocol features an **autonomous diagnosis and remediation loop** for both local terminal operations and cloud CI/CD pipelines.
+
+### Local Self-Healing (`valdoz heal`)
+When a gate check, audit, or build slice fails, you can trigger the self-healing engine:
+```bash
+# Auto-heal gate check failures
+valdoz heal gate
+
+# Auto-heal audit failures
+valdoz heal audit
+
+# Auto-heal Phase 6 build slice failures
+valdoz heal slice --slice-id 01-user-auth
+```
+During slice execution, you can also enable auto-healing automatically on failure:
+```bash
+valdoz slice done 01-user-auth --auto-heal
+```
+
+#### How the Healing Loop Works:
+1. **Context Collection**: Extracts exact failure tracebacks, recent git diffs, implicated files, and slice specifications.
+2. **AI Root-Cause Diagnosis**: Analyzes why the failure occurred and formulates a minimal patch.
+3. **Targeted Code Application**: Applies the fix to the offending files.
+4. **Mechanical Re-Verification**: Automatically re-runs gate conditions or test suites.
+5. **Human Gate Intact**: Once passing, a `HealingReport` is generated for the human Tech Lead to review and approve before advancing.
+
+---
+
+### Self-Healing CI/CD Pipeline (`valdoz ci generate --self-healing`)
+Generate a self-healing GitHub Actions workflow:
+```bash
+valdoz ci generate --self-healing
+```
+When generated with `--self-healing`, the workflow includes a dedicated `self-heal` job that executes automatically if `valdoz-gate` fails:
+- Fetches the failure logs from the GitHub Actions run.
+- Runs `valdoz audit --fix` and `valdoz heal gate`.
+- Automatically opens a **Pull Request** (`fix/valdoz-auto-heal-<run_id>`) containing the fix and root-cause analysis for team review!
+
+---
+
+## 11. Emergency Recovery & Troubleshooting
 
 ### If an Approved Phase Needs Changes (`reopen`)
 If a discovery in Phase 6 requires modifying the Architecture from Phase 4:
@@ -428,7 +471,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 
 ---
 
-## 11. Complete CLI Command Reference
+## 12. Complete CLI Command Reference
 
 | Command | Description |
 |---|---|
@@ -437,9 +480,10 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz mcp register` | Register ValdoZ MCP server into `~/.gemini/config/mcp_config.json`. |
 | `valdoz mcp run` | Launch standard stdio Model Context Protocol (MCP) server. |
 | `valdoz dashboard [--output <file>]` | Generate live Generative UI interactive dashboard HTML. |
+| `valdoz heal [gate\|audit\|slice] [--slice-id <id>]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
 | `valdoz hook install` | Install Git pre-commit hook enforcing role domains. |
-| `valdoz ci generate` | Generate GitHub Actions CI verification workflow. |
+| `valdoz ci generate [--self-healing]` | Generate GitHub Actions CI workflow (with optional self-healing PR recovery). |
 | `valdoz session start --role <builder\|scribe>` | Acquire active agent session role lock. |
 | `valdoz session end --role <role>` | Release active session role lock. |
 | `valdoz session status` | Show currently active agent sessions. |
@@ -450,7 +494,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz phase reopen <N>` | Reopen a past phase and void downstream approvals. |
 | `valdoz gate check [--ci] [--dry-run]` | Run deliverable, heading, placeholder, and citation checks. |
 | `valdoz slice start <id>` | Open a Phase 6 build slice. |
-| `valdoz slice done <id>` | Check 3 slice gate conditions and mark gated. |
+| `valdoz slice done <id> [--auto-heal]` | Check 3 slice gate conditions; optionally auto-heal failures. |
 | `valdoz slice approve <id>` | Human-only interactive approval of a build slice. |
 | `valdoz slice status` | List all slices and their states. |
 | `valdoz decision add -q <q> -c <choice> -r <why>` | Append to `decisions.jsonl` and update `decisions.md`. |
