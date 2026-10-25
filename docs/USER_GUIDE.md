@@ -649,5 +649,12 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz pack list` | List available and active stack packs. |
 | `valdoz pack add <pack_id>` | Enable a stack pack (e.g., `web-app`, `api`, `website`). |
 | `valdoz pack import <source> [--id <id>]` | Import plugin from local dir or `wshobson/agents:<plugin>`. |
+| `valdoz profile list` | List registered developer Git & GitHub profiles and defaults. |
+| `valdoz profile add <id> -n <name> -e <email> [-u <user>] [--default]` | Register or update a named developer profile. |
+| `valdoz profile use <id>` | Bind current repository to a profile and configure local Git identity. |
+| `valdoz profile status` | Display repository Git identity and multi-account credential isolation health. |
+| `valdoz auth setup [-u <user>] [--from-env <VAR>]` | Securely configure project-scoped credential vault (`.valdoz/.git-credentials`, `chmod 600`). |
+| `valdoz auth status` | Inspect project-level credential vault health, permissions, and Git helper mapping. |
+| `valdoz auth clear [--yes]` | Securely wipe and delete project credentials and unmap Git helper. |
 | `valdoz state repair` | Reconstruct `state.json` from git history. |
 | `valdoz doctor` | Run environment diagnostics and Python drift checks. |

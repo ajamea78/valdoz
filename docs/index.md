@@ -18,8 +18,10 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 2. **Evidence Over Claims**: "Done" means actual commands ran, tests passed, and deliverables exist with no placeholders (`TODO`, `TBD`).
 3. **Human Gatekeeper**: At the end of every phase, the agent stops cold. Only an interactive human can approve work. The agent cannot approve its own code.
 4. **Tamper-Proof State**: Approved deliverables are cryptographically hashed (SHA-256) and `state.json` is write-protected (`chmod 444`).
-5. **Autonomous Self-Healing**: Automated diagnosis, code patching, and gate re-verification for local development and CI/CD pipelines.
+5. **Autonomous Self-Healing**: Automated diagnosis, code patching, and gate re-verification for local development and CI/CD pipelines with strict security quarantine.
 6. **Continuous Deployment Protection**: Built-in Git `pre-push` hooks block accidental pushes to production branches until Phase 8 (Deploy) is human-approved.
+7. **Project-Scoped Credential Vaults & Multi-Account Isolation**: Each repository maintains its own isolated credential store (`.valdoz/.git-credentials`, `chmod 600`), stopping token collisions and identity leaks across personal, work, and client GitHub accounts.
+8. **Cryptographic Human Sign-Off**: Phase and slice approvals require HMAC-SHA256 signed human tokens with ephemeral project secrets and 5-minute TTL. AI agents cannot forge approval tokens.
 
 ---
 
