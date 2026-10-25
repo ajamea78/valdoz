@@ -57,6 +57,13 @@ def find_project_root() -> Path:
     return curr
 
 
+class GitIdentityState(BaseModel):
+    profile_name: str
+    github_username: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+
 class ValdozState(BaseModel):
     version: str = "3.0.0"
     project_name: str
@@ -65,6 +72,8 @@ class ValdozState(BaseModel):
     chosen_stack: Dict[str, str] = Field(default_factory=dict)
     packs: List[str] = Field(default_factory=lambda: ["base"])
     phases: Dict[str, PhaseState] = Field(default_factory=default_phases)
+    profile: Optional[str] = None
+    git_identity: Optional[GitIdentityState] = None
 
 
 class StateError(Exception):

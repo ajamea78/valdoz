@@ -163,8 +163,57 @@ valdoz ci generate
 ```
 
 #### Git Hooks Installed by `valdoz hook install`:
-- **`pre-commit`**: Prevents role domain violations (`builder` editing docs or `scribe` editing code), runs fast audit, and verifies gate requirements before each commit.
-- **`pre-push`**: Intercepts `git push` targeting `main`, `master`, `production`, or `release/*`. Because cloud platforms (Vercel, AWS, Fly, Netlify) automatically deploy pushes on these branches directly to Live, direct pushes are **blocked** unless the project is formally in Phase 8 (Deploy) and human-approved. Work must be pushed on slice/feature branches (`slice/<id>`).
+- **`pre-commit`**: Prevents role domain violations (`builder` editing docs or `scribe` editing code), runs fast audit (including Git identity check), and verifies gate requirements before each commit.
+- **`pre-push`**: Intercepts `git push` targeting `main`, `master`, `production`, or `release/*` (cloud production guard) and verifies credential isolation (`credential.useHttpPath = true`) to prevent cross-account 403 collisions before packets leave your machine.
+
+---
+
+### Multi-Account Git & GitHub Profile Management (`valdoz profile`)
+
+If you manage multiple GitHub accounts on your machine (e.g. personal `ajamea78`, corporate `gnetventory`, client orgs), Git's default credential helper matches strictly by hostname (`github.com`). This leads to the infamous `403 Permission denied` error when Git sends the wrong account's token, as well as accidental author identity leaks.
+
+ValdoZ solves this natively through developer profiles and repository isolation:
+
+#### 1. Register Developer Profiles
+```bash
+# Register personal profile (set as default)
+valdoz profile add personal \
+  --name "Ahmad Khalil" \
+  --email "ajamea@example.com" \
+  --user "ajamea78" \
+  --default
+
+# Register work/organization profile
+valdoz profile add work \
+  --name "Ahmad Khalil" \
+  --email "ahmad@company.com" \
+  --user "gnetventory" \
+  --ssh-key "~/.ssh/id_ed25519_corp"
+```
+
+#### 2. Bind Profile to Current Repository
+```bash
+# During project initialization:
+valdoz project init --profile personal
+
+# Or in an existing repository at any time:
+valdoz profile use personal
+```
+What this does automatically:
+- Configures repo-local `user.name` and `user.email` (stops global git leaks).
+- Sets `git config --local credential.useHttpPath true` so Git isolates tokens per repository path (`github.com/ajamea78/...` vs `github.com/gnetventory/...`).
+- Scopes SSH keys with `IdentitiesOnly=yes` if an SSH key was configured.
+
+#### 3. Inspect Identity & Health Status
+```bash
+valdoz profile status
+```
+Displays a real-time table verifying local vs global Git author settings, active profile alignment, and credential isolation health.
+
+#### 4. Automated Audit & Hook Enforcement
+- `valdoz audit`: Flagged if `user.email` leaks from global configs or mismatches the bound profile.
+- `valdoz audit --fix`: Automatically applies the repository's bound profile and enables `useHttpPath`.
+- `git push`: Pre-push hook blocks pushes if `credential.useHttpPath` is missing on HTTPS remotes, stopping 403 errors before network transmission.
 
 ---
 

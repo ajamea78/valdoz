@@ -55,6 +55,7 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
             PackCheckDefinition(id="secrets-scan", description="Scan for hardcoded API keys and secrets", severity="blocking"),
             PackCheckDefinition(id="lockfile-check", description="Verify lockfile presence and dependency pinning", severity="blocking"),
             PackCheckDefinition(id="placeholder-scan", description="Scan for TODO, TBD, and lorem placeholders", severity="blocking"),
+            PackCheckDefinition(id="git-identity", description="Verify local Git identity and multi-account credential isolation", severity="blocking"),
         ],
     ),
     "web-app": PackManifest(

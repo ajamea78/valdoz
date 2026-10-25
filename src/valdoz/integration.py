@@ -54,9 +54,11 @@ elif [ "$ROLE" = "scribe" ]; then
 fi
 
 # 2. Gate and Audit Checks
-if command -v valdoz >/dev/null 2>&1; then
+if [ -f ".valdoz/state.json" ] && command -v valdoz >/dev/null 2>&1; then
     valdoz gate check --ci
     valdoz audit --strict --no-network
+elif command -v valdoz >/dev/null 2>&1; then
+    valdoz audit --strict --no-network || true
 fi
 """
 
@@ -106,6 +108,23 @@ if [ "$IS_PROD_PUSH" -eq 1 ]; then
         echo "  3. If you have explicit human authorization to override, run:  VALDOZ_ALLOW_PROD_PUSH=1 git push"
         echo ""
         if [ "$VALDOZ_ALLOW_PROD_PUSH" != "1" ]; then
+            exit 1
+        fi
+    fi
+fi
+
+# 2. Multi-Account Push Identity & Credential Isolation
+REMOTE_URL=$(git config --get remote.origin.url || true)
+if [[ "$REMOTE_URL" =~ ^https:// ]]; then
+    USE_HTTP_PATH=$(git config --local credential.useHttpPath || true)
+    if [ "$USE_HTTP_PATH" != "true" ]; then
+        echo ""
+        echo "🛑 [ValdoZ Multi-Account Protection]"
+        echo "Git credential isolation ('credential.useHttpPath') is NOT enabled for this repository."
+        echo "Pushing now risks sending credentials from another GitHub account (resulting in 403 Forbidden)."
+        echo "Run:  valdoz audit --fix   or   git config --local credential.useHttpPath true"
+        echo ""
+        if [ "$VALDOZ_ALLOW_PUSH_WITHOUT_ISOLATION" != "1" ]; then
             exit 1
         fi
     fi

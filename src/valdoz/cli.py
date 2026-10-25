@@ -80,6 +80,7 @@ pack_app = typer.Typer(name="pack", help="Stack and project-type packs", no_args
 hook_app = typer.Typer(name="hook", help="Git hook management", no_args_is_help=True)
 ci_app = typer.Typer(name="ci", help="CI workflow management", no_args_is_help=True)
 mcp_app = typer.Typer(name="mcp", help="Native Model Context Protocol integration", no_args_is_help=True)
+profile_app = typer.Typer(name="profile", help="Manage multi-account Git & GitHub profiles and identity isolation", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -93,6 +94,7 @@ app.add_typer(pack_app)
 app.add_typer(hook_app)
 app.add_typer(ci_app)
 app.add_typer(mcp_app)
+app.add_typer(profile_app)
 
 
 def find_project_root() -> Path:
@@ -118,6 +120,7 @@ def main(
 def project_init(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name"),
     lang: str = typer.Option("en", "--lang", "-l", help="Language for client deliverables: en or ar"),
+    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Developer Git & GitHub profile to bind to this project"),
     skip_scan: bool = typer.Option(False, "--skip-scan", help="Skip intelligent project scanning"),
 ):
     """Initializes ValdoZ project state in the current repository."""
@@ -246,6 +249,31 @@ def project_init(
     # Store detected stack
     if assessment and assessment.detected_stack:
         state.chosen_stack = assessment.detected_stack
+
+    # Bind Developer Profile & Git Identity
+    from valdoz.profiles import apply_profile_to_repo, get_profile, load_profiles
+    from valdoz.state import GitIdentityState
+
+    selected_profile = profile
+    if not selected_profile:
+        cfg = load_profiles()
+        selected_profile = cfg.default
+
+    if selected_profile:
+        prof_obj = get_profile(selected_profile)
+        if prof_obj:
+            state.profile = selected_profile
+            state.git_identity = GitIdentityState(
+                profile_name=selected_profile,
+                name=prof_obj.name,
+                email=prof_obj.email,
+                github_username=prof_obj.github_username,
+            )
+            if (root / ".git").exists():
+                try:
+                    apply_profile_to_repo(root, selected_profile)
+                except Exception:
+                    pass
 
     valdoz_dir.mkdir(parents=True, exist_ok=True)
     save_state(root, state)
@@ -1118,5 +1146,189 @@ def dashboard_cmd(
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text(html_content, encoding="utf-8")
     console.print(f"[bold green]Live ValdoZ Dashboard generated at:[/bold green] [cyan]{out_file}[/cyan]")
+
+
+# ── Profile Commands ────────────────────────────────────────────────────────
+@profile_app.command("list")
+def profile_list():
+    """Lists all registered developer profiles."""
+    from valdoz.profiles import load_profiles
+
+    cfg = load_profiles()
+    if not cfg.profiles:
+        console.print("[yellow]No developer profiles registered yet. Run 'valdoz profile add <name> ...' to register one.[/yellow]")
+        return
+
+    table = Table(title="ValdoZ Registered Developer Profiles")
+    table.add_column("Profile ID", style="bold cyan")
+    table.add_column("Author Name", style="white")
+    table.add_column("Author Email", style="green", overflow="fold")
+    table.add_column("GitHub User", style="magenta")
+    table.add_column("SSH / Signing", style="dim")
+    table.add_column("Default", justify="center")
+
+    for pid, prof in cfg.profiles.items():
+        is_def = "[bold green]★ Default[/bold green]" if cfg.default == pid else ""
+        extra = []
+        if prof.ssh_key:
+            extra.append(f"SSH: {Path(prof.ssh_key).name}")
+        if prof.signing_key:
+            extra.append("GPG")
+        extra_str = ", ".join(extra) or "-"
+        table.add_row(pid, prof.name, prof.email, prof.github_username or "-", extra_str, is_def)
+
+    console.print(table)
+
+
+@profile_app.command("add")
+def profile_add(
+    profile_id: str = typer.Argument(..., help="Unique profile identifier (e.g. personal, work, client-a)"),
+    email: str = typer.Option(..., "--email", "-e", help="Git commit email address"),
+    name: str = typer.Option(..., "--name", "-n", help="Git commit author name"),
+    user: Optional[str] = typer.Option(None, "--user", "-u", help="GitHub username / handle"),
+    ssh_key: Optional[str] = typer.Option(None, "--ssh-key", "-s", help="Path to SSH private key for this identity"),
+    signing_key: Optional[str] = typer.Option(None, "--signing-key", "-k", help="GPG/SSH signing key ID"),
+    default: bool = typer.Option(False, "--default", "-d", help="Set this profile as system default"),
+):
+    """Registers or updates a developer profile."""
+    from valdoz.profiles import Profile, add_profile
+
+    prof = Profile(
+        name=name,
+        email=email,
+        github_username=user,
+        ssh_key=ssh_key,
+        signing_key=signing_key,
+    )
+    add_profile(profile_id, prof, set_default=default)
+    console.print(f"[bold green]Profile '{profile_id}' saved successfully.[/bold green]")
+    if default:
+        console.print(f"[dim]Set '{profile_id}' as default profile.[/dim]")
+
+
+@profile_app.command("remove")
+def profile_remove(
+    profile_id: str = typer.Argument(..., help="Profile identifier to remove"),
+):
+    """Removes a registered developer profile."""
+    from valdoz.profiles import remove_profile
+
+    removed = remove_profile(profile_id)
+    if removed:
+        console.print(f"[green]Profile '{profile_id}' removed.[/green]")
+    else:
+        console.print(f"[yellow]Profile '{profile_id}' not found.[/yellow]")
+
+
+@profile_app.command("use")
+def profile_use(
+    profile_id: str = typer.Argument(..., help="Profile identifier to bind to current repository"),
+):
+    """Binds current repository to a profile and applies local Git configs."""
+    from valdoz.profiles import apply_profile_to_repo, get_profile
+    from valdoz.state import GitIdentityState, load_state, save_state
+
+    root = find_project_root()
+    prof = get_profile(profile_id)
+    if not prof:
+        console.print(f"[bold red]Profile '{profile_id}' does not exist.[/bold red]")
+        console.print("Run 'valdoz profile list' to see available profiles or 'valdoz profile add' to create it.")
+        raise typer.Exit(1)
+
+    try:
+        applied = apply_profile_to_repo(root, profile_id)
+    except Exception as e:
+        console.print(f"[bold red]Failed to apply git configuration:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    # Update project state if .valdoz exists
+    try:
+        state = load_state(root)
+        state.profile = profile_id
+        state.git_identity = GitIdentityState(
+            profile_name=profile_id,
+            name=applied.name,
+            email=applied.email,
+            github_username=applied.github_username,
+        )
+        save_state(root, state)
+    except Exception:
+        pass
+
+    console.print(f"[bold green]Repository bound to profile '{profile_id}'.[/bold green]")
+    console.print(f"  • Author Name:  [cyan]{applied.name}[/cyan]")
+    console.print(f"  • Author Email: [cyan]{applied.email}[/cyan]")
+    console.print("  • Credential Isolation: [green]credential.useHttpPath = true[/green]")
+    if applied.ssh_key:
+        console.print(f"  • SSH Scoping:  [dim]{applied.ssh_key}[/dim]")
+
+
+@profile_app.command("status")
+def profile_status():
+    """Displays repository Git identity and multi-account credential isolation status."""
+    from valdoz.profiles import get_repo_git_identity, load_profiles
+    from valdoz.state import load_state
+
+    root = find_project_root()
+    info = get_repo_git_identity(root)
+
+    bound_profile = None
+    try:
+        state = load_state(root)
+        bound_profile = state.profile
+    except Exception:
+        pass
+
+    cfg = load_profiles()
+    prof = cfg.profiles.get(bound_profile) if bound_profile else None
+
+    table = Table(title=f"Git Multi-Account Identity Status: {root.name}")
+    table.add_column("Property", style="bold cyan", min_width=24)
+    table.add_column("Configured Value", min_width=25)
+    table.add_column("Health / Policy", justify="center", min_width=12)
+
+    # Bound Profile
+    if bound_profile:
+        table.add_row("Bound ValdoZ Profile", bound_profile, "[green]✓ Bound[/green]")
+    else:
+        table.add_row("Bound ValdoZ Profile", "[dim]None (Unbound)[/dim]", "[yellow]⚠ Unbound[/yellow]")
+
+    # Local Email
+    local_email = info.get("local_email")
+    if local_email:
+        if prof and local_email != prof.email:
+            table.add_row("Local Git Email", local_email, f"[red]✗ Mismatch ({prof.email})[/red]")
+        else:
+            table.add_row("Local Git Email", local_email, "[green]✓ Local[/green]")
+    else:
+        global_email = info.get("global_email") or "Not set"
+        table.add_row("Local Git Email", f"[yellow]Falling back to global ({global_email})[/yellow]", "[red]✗ Leaking Global[/red]")
+
+    # Local Name
+    local_name = info.get("local_name")
+    if local_name:
+        table.add_row("Local Git Name", local_name, "[green]✓ Local[/green]")
+    else:
+        global_name = info.get("global_name") or "Not set"
+        table.add_row("Local Git Name", f"[dim]Global ({global_name})[/dim]", "[yellow]⚠ Global[/yellow]")
+
+    # credential.useHttpPath
+    use_http = info.get("use_http_path")
+    if use_http == "true":
+        table.add_row("HTTP Credential Isolation", "credential.useHttpPath = true", "[green]✓ Isolated[/green]")
+    else:
+        table.add_row("HTTP Credential Isolation", "[yellow]Not set[/yellow]", "[yellow]⚠ Shared Host[/yellow]")
+
+    # Remote Origin
+    remote = info.get("remote_origin") or "None"
+    table.add_row("Remote Origin URL", remote, "[cyan]Info[/cyan]")
+
+    # SSH Command
+    ssh_cmd = info.get("ssh_command")
+    if ssh_cmd:
+        table.add_row("Custom SSH Command", ssh_cmd, "[green]✓ Scoped[/green]")
+
+    console.print(table)
+
 
 

@@ -262,6 +262,71 @@ def scan_undeclared_imports(project_root: Path) -> AuditCheckResult:
     )
 
 
+def scan_git_identity(project_root: Path) -> AuditCheckResult:
+    """Verifies local Git identity and credential isolation for multi-account safety."""
+    git_dir = project_root / ".git"
+    if not git_dir.exists():
+        return AuditCheckResult(
+            id="git-identity",
+            name="Git Multi-Account Identity Isolation",
+            severity="blocking",
+            status="skipped",
+            passed=True,
+            message="Not a git repository (missing .git directory).",
+        )
+
+    from valdoz.profiles import get_repo_git_identity, load_profiles
+
+    info = get_repo_git_identity(project_root)
+    issues: List[str] = []
+
+    # 1. Local author email & name check
+    if not info.get("local_email"):
+        issues.append("Local 'user.email' is not set (falls back to global ~/.gitconfig, risking cross-account identity leaks)")
+    if not info.get("local_name"):
+        issues.append("Local 'user.name' is not set")
+
+    # 2. Check alignment with project state
+    try:
+        state = load_state(project_root)
+        expected_profile = state.profile
+        if expected_profile:
+            profiles_cfg = load_profiles()
+            prof = profiles_cfg.profiles.get(expected_profile)
+            if prof:
+                if info.get("local_email") and info.get("local_email") != prof.email:
+                    issues.append(
+                        f"Local user.email ('{info['local_email']}') does not match bound profile '{expected_profile}' ('{prof.email}')"
+                    )
+    except Exception:
+        pass
+
+    # 3. Check credential.useHttpPath for HTTPS remotes
+    remote = info.get("remote_origin") or ""
+    if remote.startswith("https://"):
+        if info.get("use_http_path") != "true":
+            issues.append("Local 'credential.useHttpPath' is not 'true'. Multiple GitHub accounts may collide tokens.")
+
+    if issues:
+        return AuditCheckResult(
+            id="git-identity",
+            name="Git Multi-Account Identity Isolation",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message="; ".join(issues),
+        )
+
+    return AuditCheckResult(
+        id="git-identity",
+        name="Git Multi-Account Identity Isolation",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"Git identity verified (Local: {info.get('local_email')}, useHttpPath: {info.get('use_http_path') or 'n/a'}).",
+    )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -331,6 +396,38 @@ def autofix_audit_issues(project_root: Path) -> List[str]:
         except Exception:
             pass
 
+    # 3. Fix Git identity & credential isolation
+    git_dir = project_root / ".git"
+    if git_dir.exists():
+        from valdoz.profiles import apply_profile_to_repo, get_repo_git_identity, load_profiles
+
+        info = get_repo_git_identity(project_root)
+        remote_origin = info.get("remote_origin") or ""
+
+        # Configure credential.useHttpPath
+        if remote_origin.startswith("https://") and info.get("use_http_path") != "true":
+            subprocess.run(["git", "config", "--local", "credential.useHttpPath", "true"], cwd=project_root, check=False)
+            actions_taken.append("Configured 'credential.useHttpPath = true' for multi-account token isolation.")
+
+        # Bind to profile if state has profile or a default profile exists
+        profile_to_apply = None
+        try:
+            state = load_state(project_root)
+            profile_to_apply = state.profile
+        except Exception:
+            pass
+
+        if not profile_to_apply:
+            cfg = load_profiles()
+            profile_to_apply = cfg.default
+
+        if profile_to_apply:
+            try:
+                prof = apply_profile_to_repo(project_root, profile_to_apply)
+                actions_taken.append(f"Applied profile '{profile_to_apply}' ({prof.name} <{prof.email}>) to local repository.")
+            except Exception:
+                pass
+
     return actions_taken
 
 
@@ -362,6 +459,7 @@ def run_valdoz_audit(
         "secrets-scan": scan_secrets,
         "lockfile-check": scan_lockfile,
         "undeclared-imports": scan_undeclared_imports,
+        "git-identity": scan_git_identity,
     }
 
     for chk in configured_checks:
