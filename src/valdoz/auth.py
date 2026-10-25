@@ -56,31 +56,45 @@ def setup_project_vault(
     # 1. Ensure gitignored
     ensure_vault_gitignored(project_root)
 
-    # 2. Write credential entry safely
+    # 2. Reset local credential helper chain to override global ~/.gitconfig helpers
     vault_file = get_project_vault_path(project_root)
+    rel_or_abs = str(vault_file.resolve())
+    subprocess.run(["git", "config", "--local", "credential.helper", ""], cwd=project_root, check=True)
+    subprocess.run(["git", "config", "--local", "--add", "credential.helper", f"store --file {rel_or_abs}"], cwd=project_root, check=True)
+    subprocess.run(["git", "config", "--local", "credential.useHttpPath", "true"], cwd=project_root, check=True)
+
+    # 3. Extract remote path if available (e.g. ajamea78/valdoz.git)
+    res_url = subprocess.run(
+        ["git", "config", "--get", "remote.origin.url"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    remote_path = ""
+    origin_url = res_url.stdout.strip()
+    if origin_url:
+        import re
+        m = re.search(r"github\.com[:/](.+)$", origin_url)
+        if m:
+            remote_path = m.group(1).lstrip("/")
+
     clean_user = urllib.parse.quote(username.strip(), safe="")
     clean_token = urllib.parse.quote(token.strip(), safe="")
     clean_host = host.strip()
 
-    # Format: https://username:token@host
-    entry_line = f"https://{clean_user}:{clean_token}@{clean_host}\n"
-    vault_file.write_text(entry_line, encoding="utf-8")
+    # 4. Write isolated credential path variants
+    lines = []
+    if remote_path:
+        lines.append(f"https://{clean_user}:{clean_token}@{clean_host}/{remote_path}")
+        lines.append(f"https://{clean_token}@{clean_host}/{remote_path}")
+    lines.append(f"https://{clean_user}:{clean_token}@{clean_host}")
+    lines.append(f"https://{clean_token}@{clean_host}")
+    vault_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # 3. Lock permissions to 0o600 (owner read/write only)
-    os.chmod(vault_file, stat.S_IRUSR | stat.S_IWUSR)
-
-    # 4. Configure local git to use ONLY this file as credential store
-    rel_or_abs = str(vault_file.resolve())
-    subprocess.run(
-        ["git", "config", "--local", "credential.helper", f"store --file {rel_or_abs}"],
-        cwd=project_root,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "--local", "credential.useHttpPath", "true"],
-        cwd=project_root,
-        check=True,
-    )
+    # 5. Lock permissions to 0o600 (owner read/write only)
+    if vault_file.exists():
+        os.chmod(vault_file, stat.S_IRUSR | stat.S_IWUSR)
 
     return vault_file
 
