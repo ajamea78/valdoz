@@ -6,6 +6,7 @@ Enforces dual-role concurrency model: at most one builder and one scribe.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -13,6 +14,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 from pydantic import BaseModel, Field
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
+
+
+@contextlib.contextmanager
+def _session_file_mutex(project_root: Path):
+    """Provides atomic process-level file locking for concurrency safety."""
+    if fcntl is None:
+        yield
+        return
+    lck_path = project_root / ".valdoz" / ".session.lck"
+    lck_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lck_path, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 VALID_ROLES = {"builder", "scribe"}
@@ -88,36 +110,38 @@ def acquire_session(
     if role not in VALID_ROLES:
         raise ValueError(f"Invalid role: '{role}'. Must be one of {sorted(VALID_ROLES)}")
 
-    lock = load_session_lock(project_root)
+    with _session_file_mutex(project_root):
+        lock = load_session_lock(project_root)
 
-    # Check if role is currently locked
-    if role in lock.roles:
-        existing = lock.roles[role]
-        if _is_pid_alive(existing.pid) and not force_stale and existing.pid != os.getpid():
-            raise SessionLockError(
-                f"Role '{role}' is already active (PID {existing.pid}, Agent '{existing.agent_id}', "
-                f"started at {existing.started_at}). Another session cannot be started for this role."
-            )
+        # Check if role is currently locked
+        if role in lock.roles:
+            existing = lock.roles[role]
+            if _is_pid_alive(existing.pid) and not force_stale and existing.pid != os.getpid():
+                raise SessionLockError(
+                    f"Role '{role}' is already active (PID {existing.pid}, Agent '{existing.agent_id}', "
+                    f"started at {existing.started_at}). Another session cannot be started for this role."
+                )
 
-    new_session = RoleSession(
-        agent_id=agent_id or f"agent-{role}-{os.getpid()}",
-        started_at=datetime.now(timezone.utc).isoformat(),
-        pid=os.getpid(),
-    )
-    lock.roles[role] = new_session
-    save_session_lock(project_root, lock)
-    return new_session
+        new_session = RoleSession(
+            agent_id=agent_id or f"agent-{role}-{os.getpid()}",
+            started_at=datetime.now(timezone.utc).isoformat(),
+            pid=os.getpid(),
+        )
+        lock.roles[role] = new_session
+        save_session_lock(project_root, lock)
+        return new_session
 
 
 def release_session(project_root: Path, role: str) -> bool:
     """Releases the session lock for a specific role."""
     role = role.lower().strip()
-    lock = load_session_lock(project_root)
-    if role in lock.roles:
-        del lock.roles[role]
-        save_session_lock(project_root, lock)
-        return True
-    return False
+    with _session_file_mutex(project_root):
+        lock = load_session_lock(project_root)
+        if role in lock.roles:
+            del lock.roles[role]
+            save_session_lock(project_root, lock)
+            return True
+        return False
 
 
 def clear_sessions(project_root: Path, role: Optional[str] = None) -> None:

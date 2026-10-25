@@ -58,7 +58,7 @@ def test_mcp_human_approval_workflow(tmp_path: Path):
     req = dispatch_tool("valdoz_request_human_approval", {"phase_num": 1}, tmp_path)
     assert req["phase_num"] == 1
     token = req["human_token"]
-    assert token.startswith("valdoz-human-phase-1-")
+    assert token.startswith("valdoz-v1.phase.1.")
 
     # Call approval with token
     appr = dispatch_tool("valdoz_approve_with_human_token", {

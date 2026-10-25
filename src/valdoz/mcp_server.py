@@ -150,6 +150,37 @@ VALDOZ_TOOLS = [
             "required": ["target"],
         },
     },
+    {
+        "name": "valdoz_auth_status",
+        "description": "Inspect project-scoped credential vault health, permissions, git helper isolation, and masked tokens.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "valdoz_auth_setup",
+        "description": "Configure an isolated, project-scoped Git credential store in .valdoz/.git-credentials.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "description": "GitHub/Git username for this project.",
+                },
+                "token": {
+                    "type": "string",
+                    "description": "Personal Access Token for this project.",
+                },
+                "host": {
+                    "type": "string",
+                    "description": "Git host, default 'github.com'.",
+                    "default": "github.com",
+                },
+            },
+            "required": ["username", "token"],
+        },
+    },
 ]
 
 
@@ -259,7 +290,7 @@ def handle_request_human_approval(root: Path, phase_num: Optional[int] = None) -
     state = load_state(root)
     target = phase_num if phase_num is not None else state.current_phase
     phase_name = PHASE_NAMES.get(target, f"Phase {target}")
-    token = generate_human_token("phase", str(target))
+    token = generate_human_token("phase", str(target), project_root=root)
 
     return {
         "phase_num": target,
@@ -387,6 +418,20 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             slice_id=arguments.get("slice_id"),
             retries=arguments.get("retries", 3),
         )
+    elif tool_name == "valdoz_auth_status":
+        from valdoz.auth import get_project_vault_status
+        return get_project_vault_status(root)
+    elif tool_name == "valdoz_auth_setup":
+        from valdoz.auth import setup_project_vault
+        username = arguments["username"]
+        token = arguments["token"]
+        host = arguments.get("host", "github.com")
+        vault_path = setup_project_vault(root, username=username, token=token, host=host)
+        return {
+            "status": "success",
+            "message": f"Project credential vault configured at {vault_path}",
+            "vault_path": str(vault_path),
+        }
     return {"error": f"Unknown tool: {tool_name}"}
 
 

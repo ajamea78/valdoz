@@ -17,7 +17,10 @@ from pydantic import BaseModel
 
 def is_sdk_available() -> bool:
     """Checks if google.antigravity is installed and importable."""
-    return importlib.util.find_spec("google.antigravity") is not None
+    try:
+        return importlib.util.find_spec("google.antigravity") is not None
+    except (ModuleNotFoundError, ValueError, AttributeError):
+        return False
 
 
 def get_sdk_version() -> Optional[str]:

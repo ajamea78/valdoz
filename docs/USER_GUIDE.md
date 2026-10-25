@@ -217,6 +217,48 @@ Displays a real-time table verifying local vs global Git author settings, active
 
 ---
 
+### Project-Scoped Credential Vault (`valdoz auth`)
+
+To guarantee **zero global credential pollution** across different projects (e.g. personal vs work vs client projects), ValdoZ provides an isolated, project-scoped credential vault:
+
+```
+Developer Machine
+ ├── Project A (Personal: ajamea78/valdoz)
+ │    └── .valdoz/.git-credentials  [chmod 600, .gitignored] -> Token A (ajamea78)
+ └── Project B (Client: gnetventory/inventory-app)
+      └── .valdoz/.git-credentials  [chmod 600, .gitignored] -> Token B (gnetventory)
+```
+
+#### 1. Configure Project Vault
+```bash
+# Interactive setup in Antigravity or CLI:
+valdoz auth setup
+
+# Or via explicit flags / environment variables:
+valdoz auth setup --user ajamea78 --token ghp_yourPersonalAccessToken
+# or:
+valdoz auth setup --user ajamea78 --from-env GITHUB_TOKEN
+```
+What this enforces:
+- Creates `.valdoz/.git-credentials` locked to **`chmod 600`** (owner read/write only).
+- Automatically adds `.valdoz/.git-credentials` to `.gitignore` so secrets can never be committed.
+- Configures local Git: `git config --local credential.helper "store --file <project_root>/.valdoz/.git-credentials"`.
+- Bypasses global `~/.git-credentials` and OS keychains completely.
+
+#### 2. Check Vault Security & Audit Health
+```bash
+valdoz auth status
+```
+Inspects file permissions, `.gitignore` status, git untracked status, helper mapping, and masked token hash.
+
+#### 3. Clear Project Vault
+```bash
+valdoz auth clear
+```
+Securely zeroes out and deletes the local vault file and unsets the local Git credential helper.
+
+---
+
 ## 3. The Core Concept: Builder & Scribe Roles
 
 Antigravity 2.0 can run multiple subagents concurrently. To prevent race conditions and file collisions, ValdoZ divides work into two non-overlapping roles:

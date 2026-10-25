@@ -26,6 +26,11 @@ fi
 # Detect role from VALDOZ_ROLE environment variable or session.lock
 ROLE=""
 if [ -n "$VALDOZ_ROLE" ]; then
+    if [ "$VALDOZ_ROLE" != "builder" ] && [ "$VALDOZ_ROLE" != "scribe" ]; then
+        echo "[ValdoZ Hook Security Error] Invalid VALDOZ_ROLE='$VALDOZ_ROLE'."
+        echo "VALDOZ_ROLE must be strictly 'builder' or 'scribe'."
+        exit 1
+    fi
     ROLE="$VALDOZ_ROLE"
 elif [ -f ".valdoz/session.lock" ]; then
     if grep -q '"builder"' .valdoz/session.lock && ! grep -q '"scribe"' .valdoz/session.lock; then

@@ -11,7 +11,9 @@ Runs universal hygiene checks across any stack:
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -120,12 +122,55 @@ def scan_secrets(project_root: Path) -> AuditCheckResult:
         else:
             env_is_safely_ignored = True
 
+    # Check project-scoped credential vault (.valdoz/.git-credentials)
+    vault_file = project_root / ".valdoz" / ".git-credentials"
+    vault_is_safely_ignored = False
+    if vault_file.exists():
+        git_dir = project_root / ".git"
+        v_tracked = False
+        v_ignored = False
+        if git_dir.exists():
+            try:
+                res_ls = subprocess.run(
+                    ["git", "ls-files", str(vault_file)],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res_ls.stdout.strip():
+                    v_tracked = True
+
+                res_ign = subprocess.run(
+                    ["git", "check-ignore", "-q", str(vault_file)],
+                    cwd=project_root,
+                    capture_output=True,
+                    check=False,
+                )
+                if res_ign.returncode == 0:
+                    v_ignored = True
+            except Exception:
+                pass
+
+        if v_tracked:
+            violations.append("'.valdoz/.git-credentials' is tracked in git index! Untrack it immediately with 'git rm --cached .valdoz/.git-credentials'.")
+        elif not v_ignored:
+            violations.append("Project vault '.valdoz/.git-credentials' must be ignored in .gitignore.")
+        else:
+            vault_is_safely_ignored = True
+
+        mode = vault_file.stat().st_mode & 0o777
+        if mode not in (0o600, 0o400):
+            violations.append(f"Insecure permissions on '.valdoz/.git-credentials' ({oct(mode)}). Must be chmod 600.")
+
     # Walk files in project excluding virtual environments, node_modules, and ignored .env
     skip_dirs = {".git", ".venv", "node_modules", "dist", "build", ".valdoz-archive", ".pytest_cache"}
     for p in project_root.rglob("*"):
         if any(part in p.parts for part in skip_dirs):
             continue
         if env_is_safely_ignored and p == env_file:
+            continue
+        if vault_is_safely_ignored and p == vault_file:
             continue
         if p.is_file() and p.suffix in (".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".md", ".env"):
             try:
@@ -307,6 +352,17 @@ def scan_git_identity(project_root: Path) -> AuditCheckResult:
         if info.get("use_http_path") != "true":
             issues.append("Local 'credential.useHttpPath' is not 'true'. Multiple GitHub accounts may collide tokens.")
 
+    # 4. Check project-scoped vault isolation if vault exists
+    from valdoz.auth import get_project_vault_status
+    v_status = get_project_vault_status(project_root)
+    if v_status["vault_exists"]:
+        if not v_status["permissions_secure"]:
+            issues.append("Project vault '.valdoz/.git-credentials' has insecure permissions (must be chmod 600)")
+        if not v_status["is_untracked"]:
+            issues.append("Project vault '.valdoz/.git-credentials' is tracked in git index! Untrack immediately.")
+        if not v_status["credential_helper_configured"]:
+            issues.append("Local 'credential.helper' is not mapped to project vault '.valdoz/.git-credentials'")
+
     if issues:
         return AuditCheckResult(
             id="git-identity",
@@ -364,6 +420,46 @@ def autofix_audit_issues(project_root: Path) -> List[str]:
                     f.write("\n")
                 f.write(".env\n")
             actions_taken.append("Added '.env' to .gitignore.")
+
+    # 1b. Fix project credential vault safety (.valdoz/.git-credentials)
+    vault_file = project_root / ".valdoz" / ".git-credentials"
+    if vault_file.exists():
+        import stat
+        mode = vault_file.stat().st_mode & 0o777
+        if mode not in (0o600, 0o400):
+            os.chmod(vault_file, stat.S_IRUSR | stat.S_IWUSR)
+            actions_taken.append("Secured '.valdoz/.git-credentials' permissions to chmod 600.")
+
+        git_dir = project_root / ".git"
+        if git_dir.exists():
+            try:
+                res_ls = subprocess.run(
+                    ["git", "ls-files", str(vault_file)],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res_ls.stdout.strip():
+                    subprocess.run(
+                        ["git", "rm", "--cached", str(vault_file)],
+                        cwd=project_root,
+                        capture_output=True,
+                        check=False,
+                    )
+                    actions_taken.append("Untracked '.valdoz/.git-credentials' from git index.")
+            except Exception:
+                pass
+
+        gitignore = project_root / ".gitignore"
+        existing = gitignore.read_text(encoding="utf-8", errors="ignore") if gitignore.exists() else ""
+        lines = [line.strip() for line in existing.splitlines()]
+        if not any(l in (".valdoz/.git-credentials", ".valdoz/*", ".valdoz/") for l in lines):
+            with open(gitignore, "a", encoding="utf-8") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write(".valdoz/.git-credentials\n")
+            actions_taken.append("Added '.valdoz/.git-credentials' to .gitignore.")
 
     # 2. Fix missing lockfiles if package manager is available
     has_pkg_json = (project_root / "package.json").exists()

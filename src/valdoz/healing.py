@@ -14,6 +14,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
@@ -155,9 +156,23 @@ def apply_patch(project_root: Path, file_patches: Dict[str, str]) -> List[str]:
     """Applies file patches to disk and returns the list of modified paths."""
     applied = []
     root_resolved = project_root.resolve()
+
+    FORBIDDEN_PREFIXES = (
+        ".git/", ".git",
+        ".valdoz/", ".valdoz",
+        ".github/", ".github",
+        ".env",
+        "pyproject.toml", "package.json", "package-lock.json",
+        "uv.lock", "poetry.lock", "Pipfile.lock", "Cargo.lock",
+    )
+
     for rel_path, content in file_patches.items():
-        # Prevent directory traversal attacks
         clean_rel = Path(rel_path).as_posix().lstrip("/")
+
+        # Security Quarantine: block writes to git, valdoz internals, CI, and package manifests
+        if any(clean_rel.startswith(p) or clean_rel == p for p in FORBIDDEN_PREFIXES):
+            continue
+
         dest = (root_resolved / clean_rel).resolve()
         try:
             dest.relative_to(root_resolved)
@@ -247,7 +262,7 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
 
             if has_pyproject:
                 res = subprocess.run(
-                    ["pytest", "-q"],
+                    [sys.executable, "-m", "pytest", "-q"],
                     cwd=project_root,
                     capture_output=True,
                     check=False,
@@ -265,7 +280,7 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
                 py_files = list(tests_dir.glob("**/*.py"))
                 if py_files:
                     res = subprocess.run(
-                        ["pytest", "-q"],
+                        [sys.executable, "-m", "pytest", "-q"],
                         cwd=project_root,
                         capture_output=True,
                         check=False,

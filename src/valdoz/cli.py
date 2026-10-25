@@ -81,6 +81,7 @@ hook_app = typer.Typer(name="hook", help="Git hook management", no_args_is_help=
 ci_app = typer.Typer(name="ci", help="CI workflow management", no_args_is_help=True)
 mcp_app = typer.Typer(name="mcp", help="Native Model Context Protocol integration", no_args_is_help=True)
 profile_app = typer.Typer(name="profile", help="Manage multi-account Git & GitHub profiles and identity isolation", no_args_is_help=True)
+auth_app = typer.Typer(name="auth", help="Project-scoped secure credentials and git authentication", no_args_is_help=True)
 
 app.add_typer(phase_app)
 app.add_typer(session_app)
@@ -95,6 +96,7 @@ app.add_typer(hook_app)
 app.add_typer(ci_app)
 app.add_typer(mcp_app)
 app.add_typer(profile_app)
+app.add_typer(auth_app)
 
 
 def find_project_root() -> Path:
@@ -1329,6 +1331,117 @@ def profile_status():
         table.add_row("Custom SSH Command", ssh_cmd, "[green]✓ Scoped[/green]")
 
     console.print(table)
+
+
+# ── Auth Commands ───────────────────────────────────────────────────────────
+@auth_app.command("setup")
+def auth_setup(
+    user: Optional[str] = typer.Option(None, "--user", "-u", help="GitHub username"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Personal Access Token"),
+    from_env: Optional[str] = typer.Option(None, "--from-env", help="Environment variable name containing the token"),
+    host: str = typer.Option("github.com", "--host", "-h", help="Git hosting provider hostname"),
+):
+    """Configures project-scoped isolated Git credentials in .valdoz/.git-credentials."""
+    from valdoz.auth import setup_project_vault
+
+    root = find_project_root()
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        console.print("[bold red]Not a git repository (missing .git directory).[/bold red]")
+        raise typer.Exit(1)
+
+    username = user
+    if not username:
+        username = typer.prompt("Enter the GitHub username for this project")
+
+    auth_token = token
+    if from_env and not auth_token:
+        auth_token = os.environ.get(from_env)
+        if not auth_token:
+            console.print(f"[bold red]Environment variable '{from_env}' not found or empty.[/bold red]")
+            raise typer.Exit(1)
+
+    if not auth_token:
+        auth_token = typer.prompt("Enter the GitHub Personal Access Token for this project", hide_input=True)
+
+    if not username or not auth_token:
+        console.print("[bold red]Username and Token are required to configure project authentication.[/bold red]")
+        raise typer.Exit(1)
+
+    try:
+        vault_path = setup_project_vault(root, username=username, token=auth_token, host=host)
+    except Exception as e:
+        console.print(f"[bold red]Failed to configure project vault:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    console.print(
+        Panel.fit(
+            f"[bold green]✓ Project Authentication Vault Configured[/bold green]\n\n"
+            f"• [cyan]Vault Location:[/cyan] {vault_path}\n"
+            f"• [cyan]File Permissions:[/cyan] [green]chmod 600 (owner read/write only)[/green]\n"
+            f"• [cyan]Git Helper:[/cyan] [green]credential.helper = store --file {vault_path}[/green]\n"
+            f"• [cyan]Credential Isolation:[/cyan] [green]credential.useHttpPath = true[/green]\n"
+            f"• [cyan]Security:[/cyan] Ignored in .gitignore (zero global OS/keychain pollution)\n\n"
+            f"[dim]All Git operations (push, fetch, CI checks) in this project will now run autonomously inside Antigravity without prompting.[/dim]",
+            title="ValdoZ Security Isolation",
+        )
+    )
+
+
+@auth_app.command("status")
+def auth_status():
+    """Inspects project-level credential vault health, permissions, and git helper mapping."""
+    from valdoz.auth import get_project_vault_status
+
+    root = find_project_root()
+    status = get_project_vault_status(root)
+
+    table = Table(title=f"Project Credential Vault Status: {root.name}")
+    table.add_column("Security Property", style="bold cyan", min_width=25)
+    table.add_column("Configured Value", min_width=25)
+    table.add_column("Audit Health", justify="center", min_width=15)
+
+    if status["vault_exists"]:
+        table.add_row("Vault Presence", "Present (.valdoz/.git-credentials)", "[green]✓ Installed[/green]")
+        perm_label = "[green]✓ chmod 600 (Secure)[/green]" if status["permissions_secure"] else "[red]✗ Insecure Mode[/red]"
+        table.add_row("Vault Permissions", "Owner Read/Write Only", perm_label)
+        ign_label = "[green]✓ Ignored[/green]" if status["is_gitignored"] else "[red]✗ Not Ignored[/red]"
+        table.add_row("Git Ignore Status", ".valdoz/.git-credentials", ign_label)
+        track_label = "[green]✓ Untracked[/green]" if status["is_untracked"] else "[bold red]✗ Tracked (Risk)[/bold red]"
+        table.add_row("Git Index Status", "Never Committed", track_label)
+        help_label = "[green]✓ Project-Scoped[/green]" if status["credential_helper_configured"] else "[yellow]⚠ Not Mapped[/yellow]"
+        table.add_row("Git Credential Helper", "store --file <local_vault>", help_label)
+        http_label = "[green]✓ Path-Isolated[/green]" if status["credential_use_http_path"] else "[yellow]⚠ Missing[/yellow]"
+        table.add_row("credential.useHttpPath", "true", http_label)
+        table.add_row("Authenticated User", status["username"] or "Unknown", "[cyan]User[/cyan]")
+        table.add_row("Token Hash/Mask", status["token_masked"] or "None", "[dim]Masked[/dim]")
+    else:
+        table.add_row("Vault Presence", "[dim]Not Configured[/dim]", "[yellow]⚠ Missing[/yellow]")
+        table.add_row("Isolation Status", "[yellow]Global Machine Helper Active[/yellow]", "[yellow]Shared Host[/yellow]")
+        table.add_row("Recommendation", "Run 'valdoz auth setup' to isolate this project", "[cyan]Action[/cyan]")
+
+    console.print(table)
+
+
+@auth_app.command("clear")
+def auth_clear(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm deletion without prompting"),
+):
+    """Securely deletes project credentials and unsets local git credential helper."""
+    from valdoz.auth import clear_project_vault
+
+    root = find_project_root()
+    if not yes:
+        confirm = typer.confirm(f"Are you sure you want to delete project credentials for '{root.name}'?")
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            return
+
+    cleared = clear_project_vault(root)
+    if cleared:
+        console.print("[bold green]Project credential vault securely cleared and unmapped from Git.[/bold green]")
+    else:
+        console.print("[yellow]No project credential vault was found.[/yellow]")
 
 
 
