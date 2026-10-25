@@ -178,8 +178,10 @@ def verify_phase_integrity(project_root: Path, phase_num: int) -> Tuple[bool, Li
             continue
         current_hash = compute_file_sha256(file_path)
         if current_hash != expected_hash:
+            exp_disp = expected_hash[:10] if expected_hash else "None"
+            cur_disp = current_hash[:10] if current_hash else "None"
             violations.append(
-                f"Tampering detected in '{rel_path}': expected SHA-256 {expected_hash[:10]}..., got {current_hash[:10]}..."
+                f"Tampering detected in '{rel_path}': expected SHA-256 {exp_disp}..., got {cur_disp}..."
             )
 
     is_valid = len(violations) == 0

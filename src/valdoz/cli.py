@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -514,12 +516,17 @@ def research_fetch(
     url: str = typer.Argument(..., help="URL to safely fetch and sanitize"),
 ):
     """Safely fetches external content and wraps it with untrusted boundary delimiters."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        console.print(f"[bold red]Fetch Failed:[/bold red] Forbidden URL scheme '{parsed.scheme}'. Only http and https are allowed.")
+        raise typer.Exit(1)
+
     try:
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "ValdoZ-SanitizedFetcher/3.0"},
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             raw_text = response.read().decode("utf-8", errors="replace")
         wrapped = sanitize_and_wrap_content(raw_text, source_url=url)
         console.print(wrapped)
@@ -893,13 +900,13 @@ def pack_import_cmd(
 # ── Hook Commands ───────────────────────────────────────────────────────────
 @hook_app.command("install")
 def hook_install_cmd():
-    """Installs the ValdoZ pre-commit hook into .git/hooks/pre-commit."""
+    """Installs the ValdoZ pre-commit and pre-push hooks into .git/hooks/."""
     root = find_project_root()
     from valdoz.integration import install_git_hook
     try:
         hook_path = install_git_hook(root)
-        console.print(f"[bold green]Pre-commit hook installed successfully at:[/bold green] [cyan]{hook_path}[/cyan]")
-        console.print("Enforces: role domain separation (builder vs scribe), gate checks, and audit.")
+        console.print(f"[bold green]Pre-commit and Pre-push hooks installed successfully in:[/bold green] [cyan]{hook_path.parent}[/cyan]")
+        console.print("Enforces: role domain separation (builder vs scribe), gate checks, and production push protection.")
     except Exception as e:
         console.print(f"[bold red]Hook installation failed:[/bold red] {e}")
         raise typer.Exit(1)

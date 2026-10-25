@@ -186,7 +186,12 @@ def mock_or_call_ai(prompt: str, model_config: Optional[Dict[str, Any]] = None) 
 
     if api_key:
         try:
+            import urllib.parse
             import urllib.request
+            parsed = urllib.parse.urlparse(base_url)
+            if parsed.scheme not in ("http", "https"):
+                return f"Root Cause: Invalid AI base URL scheme '{parsed.scheme}'. Only http and https are permitted."
+
             req_data = json.dumps({
                 "model": model_name,
                 "messages": [
@@ -203,7 +208,7 @@ def mock_or_call_ai(prompt: str, model_config: Optional[Dict[str, Any]] = None) 
                     "Authorization": f"Bearer {api_key}",
                 },
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
         except Exception as e:

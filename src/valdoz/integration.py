@@ -61,6 +61,58 @@ fi
 """
 
 
+def generate_pre_push_hook() -> str:
+    return r"""#!/usr/bin/env bash
+# ValdoZ Protocol Pre-Push Hook (Continuous Deployment & Live Protection)
+set -e
+
+IS_PROD_PUSH=0
+DEST_BRANCH=""
+
+# Read push destination refs from stdin: <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    branch="${remote_ref#refs/heads/}"
+    if [ "$branch" = "main" ] || [ "$branch" = "master" ] || [ "$branch" = "production" ] || [ "$branch" = "prod" ] || [[ "$branch" =~ ^release/ ]]; then
+        IS_PROD_PUSH=1
+        DEST_BRANCH="$branch"
+        break
+    fi
+done
+
+# If pushing to a production-triggering branch:
+if [ "$IS_PROD_PUSH" -eq 1 ]; then
+    CURRENT_PHASE=""
+    if [ -f ".valdoz/state.json" ]; then
+        if command -v python3 >/dev/null 2>&1; then
+            CURRENT_PHASE=$(python3 -c "import json; print(json.load(open('.valdoz/state.json')).get('current_phase', ''))" 2>/dev/null || true)
+        elif command -v python >/dev/null 2>&1; then
+            CURRENT_PHASE=$(python -c "import json; print(json.load(open('.valdoz/state.json')).get('current_phase', ''))" 2>/dev/null || true)
+        fi
+    fi
+
+    # Direct push to production branches is ONLY permitted in Phase 8 (Deploy) or Phase 10 (approved Change Requests)
+    if [ "$CURRENT_PHASE" != "8" ] && [ "$CURRENT_PHASE" != "10" ]; then
+        echo ""
+        echo "🛑 [ValdoZ Push Protection Error]"
+        echo "Direct push to production-linked branch '$DEST_BRANCH' is BLOCKED."
+        echo "Current project is in Phase ${CURRENT_PHASE:-'unknown'}."
+        echo ""
+        echo "Pushing directly to '$DEST_BRANCH' triggers automatic Live/Production cloud deployments (Vercel, AWS, Fly, etc.)."
+        echo "Under ValdoZ Protocol, live deployments are strictly gated until Phase 8 (Deploy) after human sign-off."
+        echo ""
+        echo "Recommended Actions:"
+        echo "  1. Push to a feature or slice branch instead:  git push origin HEAD:refs/heads/slice/<name>"
+        echo "  2. Complete slice verification in Phase 6 / 7 before promoting to '$DEST_BRANCH'."
+        echo "  3. If you have explicit human authorization to override, run:  VALDOZ_ALLOW_PROD_PUSH=1 git push"
+        echo ""
+        if [ "$VALDOZ_ALLOW_PROD_PUSH" != "1" ]; then
+            exit 1
+        fi
+    fi
+fi
+"""
+
+
 def generate_ci_workflow(self_healing: bool = False) -> str:
     base_workflow = """name: ValdoZ Gate Verification
 
@@ -156,20 +208,27 @@ jobs:
 
 
 def install_git_hook(project_root: Path) -> Path:
-    """Installs the pre-commit hook into .git/hooks/pre-commit."""
+    """Installs the pre-commit and pre-push hooks into .git/hooks/."""
     git_dir = project_root / ".git"
     if not git_dir.exists():
         raise RuntimeError("Not a git repository (missing .git directory).")
 
     hooks_dir = git_dir / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook_file = hooks_dir / "pre-commit"
-    hook_file.write_text(generate_pre_commit_hook(), encoding="utf-8")
 
-    # Make executable (chmod +x)
-    current_mode = hook_file.stat().st_mode
-    hook_file.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return hook_file
+    # 1. pre-commit hook (roles & gate checks)
+    pre_commit_file = hooks_dir / "pre-commit"
+    pre_commit_file.write_text(generate_pre_commit_hook(), encoding="utf-8")
+    mode_c = pre_commit_file.stat().st_mode
+    pre_commit_file.chmod(mode_c | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    # 2. pre-push hook (production push & CD protection)
+    pre_push_file = hooks_dir / "pre-push"
+    pre_push_file.write_text(generate_pre_push_hook(), encoding="utf-8")
+    mode_p = pre_push_file.stat().st_mode
+    pre_push_file.chmod(mode_p | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    return pre_commit_file
 
 
 def install_ci_workflow(project_root: Path, self_healing: bool = False) -> Path:

@@ -181,8 +181,9 @@ def test_cli_hook_and_ci(run_in_tmp: Path):
     # Hook install
     res_hook = runner.invoke(app, ["hook", "install"])
     assert res_hook.exit_code == 0
-    assert "Pre-commit hook installed successfully" in res_hook.output
+    assert "Pre-commit and Pre-push hooks installed successfully" in res_hook.output
     assert (run_in_tmp / ".git" / "hooks" / "pre-commit").exists()
+    assert (run_in_tmp / ".git" / "hooks" / "pre-push").exists()
 
     # CI generate
     res_ci = runner.invoke(app, ["ci", "generate"])

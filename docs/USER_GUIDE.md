@@ -111,12 +111,16 @@ valdoz project init --skip-scan
 # 1. Generate Antigravity rules and skill playbooks (.agent/skills/):
 valdoz sync-runtimes
 
-# 2. Install the Git pre-commit hook (enforces role boundaries and checks):
+# 2. Install Git hooks (enforces role boundaries, gate checks, and production push protection):
 valdoz hook install
 
 # 3. Optional: Generate GitHub Actions CI verification:
 valdoz ci generate
 ```
+
+#### Git Hooks Installed by `valdoz hook install`:
+- **`pre-commit`**: Prevents role domain violations (`builder` editing docs or `scribe` editing code), runs fast audit, and verifies gate requirements before each commit.
+- **`pre-push`**: Intercepts `git push` targeting `main`, `master`, `production`, or `release/*`. Because cloud platforms (Vercel, AWS, Fly, Netlify) automatically deploy pushes on these branches directly to Live, direct pushes are **blocked** unless the project is formally in Phase 8 (Deploy) and human-approved. Work must be pushed on slice/feature branches (`slice/<id>`).
 
 ---
 
@@ -485,7 +489,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz dashboard [--output <file>]` | Generate live Generative UI interactive dashboard HTML. |
 | `valdoz heal [gate\|audit\|slice\|ci] [--slice-id <id>] [--log-file <path>]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices/CI runs. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
-| `valdoz hook install` | Install Git pre-commit hook enforcing role domains. |
+| `valdoz hook install` | Install Git pre-commit and pre-push hooks (role separation + live push protection). |
 | `valdoz ci generate [--self-healing]` | Generate GitHub Actions CI workflow (with optional self-healing PR recovery). |
 | `valdoz session start --role <builder\|scribe>` | Acquire active agent session role lock. |
 | `valdoz session end --role <role>` | Release active session role lock. |

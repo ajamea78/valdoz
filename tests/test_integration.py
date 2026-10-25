@@ -28,12 +28,18 @@ def git_project(tmp_path: Path):
 
 
 def test_git_hook_and_ci_generation(git_project: Path):
-    # 1. Install Git pre-commit hook
+    # 1. Install Git pre-commit and pre-push hooks
     hook_file = install_git_hook(git_project)
     assert hook_file.exists()
     import stat
     mode = hook_file.stat().st_mode
     assert bool(mode & stat.S_IXUSR)  # Executable
+
+    pre_push_file = git_project / ".git" / "hooks" / "pre-push"
+    assert pre_push_file.exists()
+    mode_p = pre_push_file.stat().st_mode
+    assert bool(mode_p & stat.S_IXUSR)  # Executable
+    assert "ValdoZ Push Protection Error" in pre_push_file.read_text(encoding="utf-8")
 
     # 2. Generate CI workflow
     ci_file = install_ci_workflow(git_project)
@@ -42,6 +48,51 @@ def test_git_hook_and_ci_generation(git_project: Path):
     assert "uv tool install valdoz-protocol@3.0.0" in ci_text
     assert "valdoz gate check --ci" in ci_text
     assert "valdoz audit --strict --no-network" in ci_text
+
+
+def test_pre_push_hook_blocks_main_in_early_phases(git_project: Path):
+    install_git_hook(git_project)
+    pre_push_file = git_project / ".git" / "hooks" / "pre-push"
+
+    # Set up ValdoZ state at Phase 6 (Build)
+    state = ValdozState(project_name="push-guard-test", current_phase=6)
+    save_state(git_project, state)
+
+    # Simulate git passing push refs for 'main' on stdin:
+    stdin_data = "refs/heads/main 1111111 refs/heads/main 0000000\n"
+    res = subprocess.run(
+        [str(pre_push_file), "origin", "https://github.com/example/repo.git"],
+        input=stdin_data,
+        cwd=str(git_project),
+        text=True,
+        capture_output=True,
+    )
+    # Must fail and block push to main in Phase 6
+    assert res.returncode != 0
+    assert "Direct push to production-linked branch 'main' is BLOCKED" in res.stdout
+
+    # Pushing to a feature branch is allowed
+    stdin_feature = "refs/heads/slice/01-auth 1111111 refs/heads/slice/01-auth 0000000\n"
+    res_feature = subprocess.run(
+        [str(pre_push_file), "origin", "https://github.com/example/repo.git"],
+        input=stdin_feature,
+        cwd=str(git_project),
+        text=True,
+        capture_output=True,
+    )
+    assert res_feature.returncode == 0
+
+    # Advance to Phase 8 (Deploy) -> push to main is permitted
+    state.current_phase = 8
+    save_state(git_project, state)
+    res_phase8 = subprocess.run(
+        [str(pre_push_file), "origin", "https://github.com/example/repo.git"],
+        input=stdin_data,
+        cwd=str(git_project),
+        text=True,
+        capture_output=True,
+    )
+    assert res_phase8.returncode == 0
 
 
 def test_full_project_lifecycle_dry_run(git_project: Path):
