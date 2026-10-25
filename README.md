@@ -17,17 +17,22 @@
 
 ### 1. Install ValdoZ
 ```bash
+# Install uv (if not already installed):
 curl -Lsf https://astral.sh/uv/install.sh | sh
-uv tool install valdoz-protocol@3.0.0
+
+# Install from local source (inside cloned repository):
+uv tool install --editable . --force
+
+# Register with Google Antigravity MCP:
+valdoz mcp register
 ```
 
 ### 2. Initialize in your Repository
 ```bash
 cd /path/to/your-project
-valdoz project init              # English deliverables
-# or: valdoz project init --lang ar  # Arabic deliverables
+valdoz project init              # Scans maturity & auto-places phase (or --lang ar)
 valdoz sync-runtimes             # Generate Antigravity rules & skills
-valdoz hook install              # Enforce role locks in Git pre-commit
+valdoz hook install              # Enforce role locks & CD push protection
 ```
 
 ### 3. Daily Operating Loop

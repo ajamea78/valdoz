@@ -39,32 +39,76 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 ## 2. Quick Setup & Intelligent Project Initialization
 
 ### Installation
-ValdoZ is installed via `uv tool`:
 
-#### For Local Development / Source Installation:
+ValdoZ can be installed globally as an isolated CLI tool using **uv** (recommended), **pipx**, or standard **pip**.
+
+#### Prerequisites: Install `uv` (if not already installed)
 ```bash
-# Install directly from the local repository:
-uv tool install --editable /home/akhalil/valdoz --force
+# macOS / Linux:
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Or from inside the cloned repo directory:
+# Windows (PowerShell):
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+---
+
+#### Method 1: Local Source Installation (Recommended for Development)
+From inside the `valdoz` repository directory:
+```bash
+cd /path/to/valdoz
+
+# Install globally in editable mode (updates live as you edit source):
 uv tool install --editable . --force
+
+# Or standard global tool install:
+uv tool install . --force
 ```
 
-#### From GitHub:
+*Alternative with `pipx` or `pip`:*
 ```bash
-uv tool install git+https://github.com/akhalil/valdoz.git --force
+# Using pipx:
+pipx install .
+
+# Or inside an active virtual environment:
+pip install -e .
 ```
 
-#### From PyPI Registry (Once Published):
+---
+
+#### Method 2: From Remote Git Repository (Once Hosted on GitHub/GitLab)
 ```bash
-uv tool install valdoz-protocol@3.0.0
+# Install directly from git:
+uv tool install git+https://github.com/<your-username>/valdoz.git --force
 ```
 
-Verify your installation:
+---
+
+#### Method 3: From PyPI Registry (Once Published)
 ```bash
-valdoz --version
-# Output: ValdoZ Protocol version 3.0.0
+# Public PyPI package:
+uv tool install valdoz-protocol
+
+# Or with pipx:
+pipx install valdoz-protocol
 ```
+
+---
+
+### Post-Installation & Antigravity Setup
+
+1. **Verify CLI Installation**:
+   ```bash
+   valdoz --version
+   # Output: ValdoZ Protocol version 3.0.0
+   ```
+
+2. **Register ValdoZ with Google Antigravity**:
+   To enable native tool calling, automated auditing, and in-chat self-healing inside Antigravity:
+   ```bash
+   valdoz mcp register
+   ```
+   *This writes the MCP server configuration into `~/.gemini/config/mcp_config.json`.*
 
 ### Intelligent Project Initialization (`valdoz project init`)
 ValdoZ is not a rigid one-size-fits-all checklist. It features an **Intelligent Project Scanner** that inspects your repository when initialized, detects its maturity archetype, and automatically routes you to the right starting phase:
