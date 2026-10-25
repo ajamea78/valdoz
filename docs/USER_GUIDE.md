@@ -6,16 +6,16 @@
 
 ## Table of Contents
 1. [What is ValdoZ? (The 30-Second Mental Model)](#1-what-is-valdoz-the-30-second-mental-model)
-2. [Quick Setup & Intelligent Project Initialization](#2-quick-setup--intelligent-project-initialization)
-3. [The Core Concept: Builder & Scribe Roles](#3-the-core-concept-builder--scribe-roles)
-4. [The 11 Lifecycle Phases (Phase 0–10 Cheat Sheet)](#4-the-11-lifecycle-phases-phase-010-cheat-sheet)
+2. [Quick Setup & Intelligent Project Initialization](#2-quick-setup-intelligent-project-initialization)
+3. [The Core Concept: Builder & Scribe Roles](#3-the-core-concept-builder-scribe-roles)
+4. [The 11 Lifecycle Phases (Phase 0-10 Cheat Sheet)](#4-the-11-lifecycle-phases-phase-0-10-cheat-sheet)
 5. [Daily Operating Loop: Step-by-Step](#5-daily-operating-loop-step-by-step)
 6. [Phase 6: Mastering Build Slices](#6-phase-6-mastering-build-slices)
-7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene--automated-remediation)
-8. [Stack Packs & Ecosystem Marketplace Plugins](#8-stack-packs--ecosystem-marketplace-plugins)
+7. [Universal Hygiene & Automated Remediation](#7-universal-hygiene-automated-remediation)
+8. [Stack Packs & Ecosystem Marketplace Plugins](#8-stack-packs-ecosystem-marketplace-plugins)
 9. [100% In-Antigravity Native Management (Zero Terminal Switching)](#9-100-in-antigravity-native-management-zero-terminal-switching)
-10. [Autonomous Self-Healing Engine (CI/CD & Local Gates)](#10-autonomous-self-healing-engine-cicd--local-gates)
-11. [Emergency Recovery & Troubleshooting](#11-emergency-recovery--troubleshooting)
+10. [Autonomous Self-Healing Engine (CI/CD & Local Gates)](#10-autonomous-self-healing-engine-cicd-local-gates)
+11. [Emergency Recovery & Troubleshooting](#11-emergency-recovery-troubleshooting)
 12. [Complete CLI Command Reference](#12-complete-cli-command-reference)
 
 ---
@@ -200,7 +200,7 @@ ValdoZ locks `.valdoz/session.lock`. Two builders cannot conflict on the same re
 
 ---
 
-## 4. The 11 Lifecycle Phases (Phase 0–10 Cheat Sheet)
+## 4. The 11 Lifecycle Phases (Phase 0-10 Cheat Sheet)
 
 | Phase | Name | What Happens | What You Deliver |
 |---|---|---|---|
