@@ -77,3 +77,24 @@ def test_scan_env_warning(tmp_path: Path):
     assessment = assess_maturity(signals)
     assert any(".env" in w for w in assessment.warnings)
     assert "secure_env_file" in assessment.auto_remediations
+
+
+def test_scan_nested_inside_skip_dir_name(tmp_path: Path):
+    # If the project root itself is located inside a folder named 'build' or 'env'
+    nested_root = tmp_path / "build" / "my_project"
+    nested_root.mkdir(parents=True)
+
+    src = nested_root / "src"
+    src.mkdir()
+    (src / "main.py").write_text("print('hello')")
+
+    tests = nested_root / "tests"
+    tests.mkdir()
+    (tests / "test_main.py").write_text("def test_it(): pass")
+
+    signals = scan_project(nested_root)
+    assert signals.has_source_code
+    assert signals.source_file_count == 2
+    assert signals.has_tests
+    assert signals.test_file_count == 1
+

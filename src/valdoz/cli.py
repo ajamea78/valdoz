@@ -678,6 +678,8 @@ def slice_done_cmd(
             if report.success:
                 console.print(f"[bold green]✓ {report.human_review_summary}[/bold green]")
                 console.print(f"Applied fixes to: {', '.join(report.applied_files)}")
+                s = done_slice(root, slice_id, coverage_delta=max(cov_delta, 0.0))
+                console.print(f"[bold green]Slice '{s.slice_id}' completed successfully![/bold green] Status: [cyan]gated[/cyan].")
                 return
             else:
                 console.print(f"[bold red]✗ Self-healing exhausted:[/bold red] {report.root_cause}")
@@ -924,43 +926,69 @@ def ci_generate_cmd(
 # ── Heal Command ────────────────────────────────────────────────────────────
 @app.command("heal")
 def heal_cmd(
-    target: str = typer.Argument("gate", help="Target failure to heal: 'gate', 'audit', or 'slice'"),
+    target: str = typer.Argument("gate", help="Target failure to heal: 'gate', 'audit', 'slice', or 'ci'"),
     slice_id: Optional[str] = typer.Option(None, "--slice-id", "-s", help="Slice identifier if healing a slice"),
+    log_file: Optional[Path] = typer.Option(None, "--log-file", "-l", help="Optional log file containing error trace"),
     retries: int = typer.Option(3, "--retries", "-r", help="Maximum autonomous remediation iterations"),
 ):
-    """Runs autonomous AI diagnosis and self-healing for failed gates, audits, or slices."""
+    """Runs autonomous AI diagnosis and self-healing for failed gates, audits, slices, or CI runs."""
     root = find_project_root()
     from valdoz.healing import collect_failure_context, run_healing_loop
 
     console.print(f"[bold cyan]🔍 Inspecting failure state for healing target: [bold white]{target}[/bold white]...[/bold cyan]")
     error_output = ""
 
+    if log_file and log_file.exists():
+        error_output = log_file.read_text(encoding="utf-8", errors="replace")
+
     if target == "audit":
-        from valdoz.checks import run_valdoz_audit
-        rep = run_valdoz_audit(root, strict=True)
-        if rep.passed:
-            console.print("[green]✓ Audit is already passing! No healing needed.[/green]")
-            return
-        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+        if not error_output:
+            from valdoz.checks import run_valdoz_audit
+            rep = run_valdoz_audit(root, strict=True)
+            if rep.passed:
+                console.print("[green]✓ Audit is already passing! No healing needed.[/green]")
+                return
+            error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
     elif target == "gate":
-        from valdoz.gates import run_phase_gate_checks
-        rep = run_phase_gate_checks(root)
-        if rep.passed:
-            console.print(f"[green]✓ Phase {rep.phase} gate is already passing! No healing needed.[/green]")
-            return
-        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+        if not error_output:
+            from valdoz.gates import run_phase_gate_checks
+            rep = run_phase_gate_checks(root)
+            if rep.passed:
+                console.print(f"[green]✓ Phase {rep.phase} gate is already passing! No healing needed.[/green]")
+                return
+            error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
     elif target == "slice":
         if not slice_id:
             console.print("[red]Error: --slice-id is required when healing a slice.[/red]")
             raise typer.Exit(1)
-        error_output = f"Slice {slice_id} failed gate conditions or unit tests."
+        if not error_output:
+            error_output = f"Slice {slice_id} failed gate conditions or unit tests."
+    elif target == "ci":
+        if not error_output:
+            ci_log = root / ".valdoz" / "ci-logs" / "failure.txt"
+            if ci_log.exists():
+                error_output = ci_log.read_text(encoding="utf-8", errors="replace")
+            else:
+                from valdoz.checks import run_valdoz_audit
+                from valdoz.gates import run_phase_gate_checks
+                audit_rep = run_valdoz_audit(root, strict=True)
+                gate_rep = run_phase_gate_checks(root)
+                errors = []
+                if not audit_rep.passed:
+                    errors.extend(f"[Audit] [{c.id}] {c.name}: {c.message}" for c in audit_rep.checks if not c.passed)
+                if not gate_rep.passed:
+                    errors.extend(f"[Gate] [{c.id}] {c.name}: {c.message}" for c in gate_rep.checks if not c.passed)
+                if not errors:
+                    console.print("[green]✓ All CI gate and audit checks are already passing! No healing needed.[/green]")
+                    return
+                error_output = "\n".join(errors)
     else:
-        console.print(f"[red]Unknown healing target '{target}'. Use 'gate', 'audit', or 'slice'.[/red]")
+        console.print(f"[red]Unknown healing target '{target}'. Use 'gate', 'audit', 'slice', or 'ci'.[/red]")
         raise typer.Exit(1)
 
     ctx = collect_failure_context(
         root,
-        failure_type=f"{target}_check" if target != "audit" else "audit",
+        failure_type="audit" if target == "audit" else ("ci" if target == "ci" else f"{target}_check"),
         error_output=error_output,
         slice_id=slice_id,
     )

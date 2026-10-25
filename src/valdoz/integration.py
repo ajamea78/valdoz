@@ -132,8 +132,8 @@ jobs:
         run: |
           # 1. Attempt automated audit fixes first
           valdoz audit --fix || true
-          # 2. Run ValdoZ Self-Healing Engine against failure context
-          valdoz heal gate || true
+          # 2. Run ValdoZ Self-Healing Engine against captured CI failure context
+          valdoz heal ci --log-file .valdoz/ci-logs/failure.txt || true
 
       - name: Create Pull Request with Diagnostic Report
         uses: peter-evans/create-pull-request@v6

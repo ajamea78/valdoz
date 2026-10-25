@@ -177,7 +177,11 @@ def scan_project(project_root: Path) -> ProjectSignals:
 
     # ── Source code detection ───────────────────────────────────────────
     for p in project_root.rglob("*"):
-        if any(part in SKIP_DIRS for part in p.parts):
+        try:
+            rel_parts = p.relative_to(project_root).parts
+        except ValueError:
+            rel_parts = p.parts
+        if any(part in SKIP_DIRS for part in rel_parts):
             continue
         if p.is_file():
             ext = p.suffix.lower()
@@ -198,7 +202,11 @@ def scan_project(project_root: Path) -> ProjectSignals:
                      "*.spec.js", "*.spec.ts", "*.test.jsx", "*.test.tsx"]
     for pattern in test_patterns:
         for p in project_root.rglob(pattern):
-            if not any(part in SKIP_DIRS for part in p.parts):
+            try:
+                rel_parts = p.relative_to(project_root).parts
+            except ValueError:
+                rel_parts = p.parts
+            if not any(part in SKIP_DIRS for part in rel_parts):
                 signals.test_file_count += 1
     if signals.test_file_count > 0:
         signals.has_tests = True

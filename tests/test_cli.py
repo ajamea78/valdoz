@@ -191,5 +191,83 @@ def test_cli_hook_and_ci(run_in_tmp: Path):
     assert (run_in_tmp / ".github" / "workflows" / "valdoz.yml").exists()
 
 
+def test_cli_heal_ci_command(run_in_tmp: Path):
+    runner.invoke(app, ["project", "init", "--name", "heal-cli-test"])
+    
+    # Passing state: heal ci should report already passing
+    res_ci_pass = runner.invoke(app, ["heal", "ci"])
+    assert res_ci_pass.exit_code == 0
+    assert "All CI gate and audit checks are already passing" in res_ci_pass.output
+
+    # Using log file
+    log_file = run_in_tmp / "error.log"
+    log_file.write_text("Audit failure: missing lockfile")
+    res_log = runner.invoke(app, ["heal", "ci", "--log-file", str(log_file)])
+    # Fails if AI provider not configured, or completes with mock
+    assert "Inspecting failure state" in res_log.output
+
+
+def test_cli_slice_done_auto_heal(run_in_tmp: Path, monkeypatch):
+    import subprocess
+    subprocess.run(["git", "init"], cwd=str(run_in_tmp), check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=str(run_in_tmp), check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(run_in_tmp), check=True)
+
+    runner.invoke(app, ["project", "init", "--name", "slice-heal-test"])
+    
+    # Advance to Phase 6
+    from valdoz.state import load_state, save_state
+    state = load_state(run_in_tmp)
+    state.current_phase = 6
+    save_state(run_in_tmp, state)
+
+    # Create dummy initial commit
+    (run_in_tmp / "README.md").write_text("# Demo")
+    subprocess.run(["git", "add", "README.md"], cwd=str(run_in_tmp), check=True)
+    subprocess.run(["git", "commit", "-m", "initial commit"], cwd=str(run_in_tmp), check=True)
+
+    # Create slice spec & start slice
+    slices_dir = run_in_tmp / "docs" / "slices"
+    slices_dir.mkdir(parents=True)
+    spec_content = """# Slice 01: Core
+## Summary
+Core slice description.
+## Acceptance Criteria
+- Unit tests pass
+## Test Plan
+- pytest
+## File Manifest
+- tests/test_core.py
+"""
+    (slices_dir / "01-core.md").write_text(spec_content)
+
+    res_start = runner.invoke(app, ["slice", "start", "01-core"])
+    assert res_start.exit_code == 0
+
+    # Auto heal mock response
+    mock_resp = """
+Root Cause: Tests were missing assertion.
+
+FILE: tests/test_core.py
+```python
+def test_core():
+    assert True
+```
+"""
+    monkeypatch.setenv("VALDOZ_HEAL_MOCK_RESPONSE", mock_resp)
+
+    # When cov_delta is negative below threshold, done_slice fails gate condition (c)
+    # With --auto-heal, it triggers healing loop and marks slice gated
+    res_done = runner.invoke(app, ["slice", "done", "01-core", "--cov-delta", "-2.0", "--auto-heal"])
+    assert res_done.exit_code == 0
+    assert "completed successfully" in res_done.output
+
+    # Verify slice is now gated
+    from valdoz.slices import load_slice
+    s = load_slice(run_in_tmp, "01-core")
+    assert s.status == "gated"
+
+
+
 
 

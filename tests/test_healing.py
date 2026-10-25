@@ -87,3 +87,28 @@ Product Manager, Lead Architect.
     assert "docs/01-intake.md" in report.applied_files
     assert report.attempt_count >= 1
     assert "TODO" not in target_file.read_text()
+
+
+def test_apply_patch_prevents_directory_traversal(tmp_path: Path):
+    patches = {
+        "../../outside.txt": "evil content",
+        "nested/../../another_outside.txt": "evil content",
+        "src/valid.py": "x = 1\n",
+    }
+    applied = apply_patch(tmp_path, patches)
+    assert "src/valid.py" in applied
+    assert len(applied) == 1
+    assert not (tmp_path.parent / "outside.txt").exists()
+    assert (tmp_path / "src" / "valid.py").read_text() == "x = 1\n"
+
+
+def test_verify_after_patch_ci(tmp_path: Path):
+    from valdoz.healing import verify_after_patch
+    from valdoz.state import ValdozState, save_state
+    state = ValdozState(project_name="ci-test", current_phase=0)
+    save_state(tmp_path, state)
+
+    ctx = HealingContext(failure_type="ci", error_trace="CI failure")
+    # State exists, Phase 0 has no deliverables required -> passes audit & gate
+    assert verify_after_patch(tmp_path, ctx) is True
+

@@ -154,13 +154,19 @@ def parse_ai_patch_response(response_text: str) -> Dict[str, str]:
 def apply_patch(project_root: Path, file_patches: Dict[str, str]) -> List[str]:
     """Applies file patches to disk and returns the list of modified paths."""
     applied = []
+    root_resolved = project_root.resolve()
     for rel_path, content in file_patches.items():
         # Prevent directory traversal attacks
-        clean_rel = Path(rel_path).as_posix().lstrip("/").replace("../", "")
-        dest = project_root / clean_rel
+        clean_rel = Path(rel_path).as_posix().lstrip("/")
+        dest = (root_resolved / clean_rel).resolve()
+        try:
+            dest.relative_to(root_resolved)
+        except ValueError:
+            # Traversal attempt outside project root - ignore
+            continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content, encoding="utf-8")
-        applied.append(clean_rel)
+        applied.append(dest.relative_to(root_resolved).as_posix())
     return applied
 
 
@@ -219,11 +225,22 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
         from valdoz.gates import run_phase_gate_checks
         rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
         return rep.passed
+    elif ctx.failure_type == "ci":
+        from valdoz.checks import run_valdoz_audit
+        from valdoz.gates import run_phase_gate_checks
+        audit_rep = run_valdoz_audit(project_root, strict=True)
+        if not audit_rep.passed:
+            return False
+        gate_rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
+        return gate_rep.passed
     elif ctx.failure_type in ("slice_gate", "slice_test"):
         # Run local test suite (e.g. pytest or npm test)
         try:
-            # Check pytest
-            if (project_root / "pyproject.toml").exists() or (project_root / "tests").exists():
+            has_pyproject = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
+            has_package_json = (project_root / "package.json").exists()
+            tests_dir = project_root / "tests"
+
+            if has_pyproject:
                 res = subprocess.run(
                     ["pytest", "-q"],
                     cwd=project_root,
@@ -231,8 +248,7 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
                     check=False,
                 )
                 return res.returncode == 0
-            # Check npm test
-            elif (project_root / "package.json").exists():
+            elif has_package_json:
                 res = subprocess.run(
                     ["npm", "test"],
                     cwd=project_root,
@@ -240,6 +256,24 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
                     check=False,
                 )
                 return res.returncode == 0
+            elif tests_dir.exists() and tests_dir.is_dir():
+                py_files = list(tests_dir.glob("**/*.py"))
+                if py_files:
+                    res = subprocess.run(
+                        ["pytest", "-q"],
+                        cwd=project_root,
+                        capture_output=True,
+                        check=False,
+                    )
+                    return res.returncode == 0
+                else:
+                    res = subprocess.run(
+                        ["npm", "test"],
+                        cwd=project_root,
+                        capture_output=True,
+                        check=False,
+                    )
+                    return res.returncode == 0
         except Exception:
             return False
     return True

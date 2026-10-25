@@ -134,7 +134,7 @@ VALDOZ_TOOLS = [
             "properties": {
                 "target": {
                     "type": "string",
-                    "enum": ["gate", "audit", "slice"],
+                    "enum": ["gate", "audit", "slice", "ci"],
                     "description": "Failure type to heal.",
                 },
                 "slice_id": {
@@ -302,6 +302,9 @@ def handle_heal_tool(
 ) -> Dict[str, Any]:
     from valdoz.healing import collect_failure_context, run_healing_loop
     error_output = ""
+    if target not in ("gate", "audit", "slice", "ci"):
+        return {"status": "error", "error": f"Invalid target '{target}'. Must be 'gate', 'audit', 'slice', or 'ci'."}
+
     if target == "audit":
         from valdoz.checks import run_valdoz_audit
         rep = run_valdoz_audit(root, strict=True)
@@ -315,11 +318,30 @@ def handle_heal_tool(
             return {"status": "skipped", "message": "Gate is already passing."}
         error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
     elif target == "slice":
+        if not slice_id:
+            return {"status": "error", "error": "slice_id is required when healing a slice."}
         error_output = f"Slice {slice_id} verification failed."
+    elif target == "ci":
+        ci_log = root / ".valdoz" / "ci-logs" / "failure.txt"
+        if ci_log.exists():
+            error_output = ci_log.read_text(encoding="utf-8", errors="replace")
+        else:
+            from valdoz.checks import run_valdoz_audit
+            from valdoz.gates import run_phase_gate_checks
+            audit_rep = run_valdoz_audit(root, strict=True)
+            gate_rep = run_phase_gate_checks(root)
+            errors = []
+            if not audit_rep.passed:
+                errors.extend(f"[Audit] [{c.id}] {c.name}: {c.message}" for c in audit_rep.checks if not c.passed)
+            if not gate_rep.passed:
+                errors.extend(f"[Gate] [{c.id}] {c.name}: {c.message}" for c in gate_rep.checks if not c.passed)
+            if not errors:
+                return {"status": "skipped", "message": "CI checks are already passing."}
+            error_output = "\n".join(errors)
 
     ctx = collect_failure_context(
         root,
-        failure_type=f"{target}_check" if target != "audit" else "audit",
+        failure_type="audit" if target == "audit" else ("ci" if target == "ci" else f"{target}_check"),
         error_output=error_output,
         slice_id=slice_id,
     )

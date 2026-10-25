@@ -12,6 +12,26 @@ def test_mcp_tools_list():
     assert "valdoz_slice_ops" in names
     assert "valdoz_request_human_approval" in names
     assert "valdoz_approve_with_human_token" in names
+    assert "valdoz_heal" in names
+
+
+def test_mcp_dispatch_heal_tool(tmp_path: Path):
+    state = ValdozState(project_name="mcp-test", language="en", current_phase=0)
+    save_state(tmp_path, state)
+
+    # Healing already passing gate -> skipped
+    res = dispatch_tool("valdoz_heal", {"target": "gate"}, tmp_path)
+    assert res["status"] == "skipped"
+
+    # Slice healing without slice_id -> error
+    err = dispatch_tool("valdoz_heal", {"target": "slice"}, tmp_path)
+    assert err["status"] == "error"
+    assert "slice_id is required" in err["error"]
+
+    # Invalid target -> error
+    invalid = dispatch_tool("valdoz_heal", {"target": "invalid"}, tmp_path)
+    assert invalid["status"] == "error"
+    assert "Invalid target" in invalid["error"]
 
 def test_mcp_dispatch_status_and_audit(tmp_path: Path):
     state = ValdozState(project_name="mcp-test", language="en", current_phase=0)

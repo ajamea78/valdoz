@@ -412,6 +412,9 @@ valdoz heal audit
 
 # Auto-heal Phase 6 build slice failures
 valdoz heal slice --slice-id 01-user-auth
+
+# Auto-heal CI failure from diagnostic log file
+valdoz heal ci --log-file .valdoz/ci-logs/failure.txt
 ```
 During slice execution, you can also enable auto-healing automatically on failure:
 ```bash
@@ -480,7 +483,7 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz mcp register` | Register ValdoZ MCP server into `~/.gemini/config/mcp_config.json`. |
 | `valdoz mcp run` | Launch standard stdio Model Context Protocol (MCP) server. |
 | `valdoz dashboard [--output <file>]` | Generate live Generative UI interactive dashboard HTML. |
-| `valdoz heal [gate\|audit\|slice] [--slice-id <id>]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices. |
+| `valdoz heal [gate\|audit\|slice\|ci] [--slice-id <id>] [--log-file <path>]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices/CI runs. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
 | `valdoz hook install` | Install Git pre-commit hook enforcing role domains. |
 | `valdoz ci generate [--self-healing]` | Generate GitHub Actions CI workflow (with optional self-healing PR recovery). |
