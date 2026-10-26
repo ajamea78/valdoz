@@ -127,7 +127,7 @@ valdoz project init
 
 2. **🏗️ Brownfield (Active In-Development Projects)**:
    - *Signals*: Existing source files (`src/`), tests (`pytest`, `jest`), manifests (`package.json`, `pyproject.toml`), and lockfiles.
-   - *Action*: Detects that setup, architecture, and stack decisions are already satisfied. Pre-approves earlier phases as `approved (by: auto-scanner)` and places the project directly into **Phase 6 (Build Slices)** or **Phase 7 (Verify)**.
+   - *Action*: Detects that setup, architecture, and stack decisions are already satisfied. Pre-approves earlier phases as `approved (by: auto-scanner (unverified))` with a prominent fast-forward notice, and places the project directly into **Phase 6 (Build Slices)** or **Phase 7 (Verify)**. To enforce manual human sign-off from Phase 0, supply `--require-human-signoff`.
 
 3. **🚀 Production (Live Deployed Systems)**:
    - *Signals*: Mature git history (100+ commits), deployment infrastructure (`Dockerfile`, `docker-compose.yml`, `k8s/`, `terraform`), and active CI pipelines.
@@ -145,6 +145,9 @@ valdoz project init --lang ar
 
 # Explicitly name your project:
 valdoz project init --name "my-saas-platform"
+
+# Skip auto-approving detected phases and require manual human signoff from Phase 0:
+valdoz project init --require-human-signoff
 
 # Skip the intelligent scanner and force Phase 0:
 valdoz project init --skip-scan
@@ -330,7 +333,7 @@ Have Antigravity draft the deliverable in `docs/` according to the phase playboo
   # Pre-log the URL first (defense against malicious injections):
   valdoz research log --url "https://api.stripe.com" --claim "OAuth token requirements"
   
-  # Fetch sanitized content:
+  # Fetch sanitized content (1MB response limit, Content-Type filtered, metadata/SSRF blocked):
   valdoz research fetch "https://api.stripe.com"
   
   # Log verified findings:
@@ -347,11 +350,12 @@ Before asking for approval, verify that all deliverable requirements pass:
 valdoz gate check
 ```
 The gate checks:
-- Deliverable files exist
-- All required headings are present (English or Arabic)
-- No `TODO`, `TBD`, `lorem ipsum` remain
-- All external URLs were pre-logged
-- Prior approved deliverables were not tampered with
+- **Audit Log Integrity**: Verifies the global SHA-256 hash-chain of `.valdoz/approvals.log` (blocking tampering detection)
+- **Deliverables Existence**: Target phase deliverable files exist on disk
+- **Headings & Structure**: All required headings are present (English or Arabic)
+- **Placeholder Hygiene**: No `TODO`, `TBD`, `lorem ipsum` remain
+- **Research Citations**: All external URLs cited in documentation were pre-logged
+- **Prior Phase Integrity**: Prior approved deliverables match cryptographic composite hashes recorded at approval time
 
 ### Step 4: Human Interactive Approval
 Once `valdoz gate check` passes, Antigravity **must stop and ask for your approval**.
@@ -573,9 +577,13 @@ valdoz heal gate --preview
 1. **Context Collection**: Extracts exact failure tracebacks, recent git diffs, implicated files, and slice specifications.
 2. **AI Root-Cause Diagnosis**: Analyzes why the failure occurred and formulates a minimal patch.
 3. **Patch Diff Preview**: Computes unified diffs before disk writes; interactive terminal sessions prompt the user for confirmation.
-4. **Targeted Code Application**: Applies the fix to the offending files under quarantine protection.
-5. **Mechanical Re-Verification**: Automatically re-runs test suites or gate conditions.
-6. **Human Gate Intact**: Once passing, a `HealingReport` is generated for human review.
+4. **Security Safeguards & Code Quarantine**:
+   - AI endpoints targeting cloud metadata addresses (`169.254.169.254`, `metadata.google.internal`) or loopbacks are blocked.
+   - Patch sizes are capped at 512 KB per file.
+   - Python patches are syntactically parsed with `ast.parse()` to ensure structural validity before disk writes.
+5. **Targeted Code Application**: Applies the fix to offending files under quarantine protection.
+6. **Mechanical Re-Verification**: Automatically re-runs test suites or gate conditions.
+7. **Human Gate Intact**: Once passing, a `HealingReport` is generated for human review.
 
 ---
 
@@ -713,12 +721,46 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 
 ---
 
-## 14. Complete CLI Command Reference
+## 14. Programmatic Python API
+
+For Python-based orchestrators, custom automation scripts, or CI integration, ValdoZ exports its core governance primitives as a stable Python API:
+
+```python
+from valdoz import (
+    load_state,
+    save_state,
+    ValdozState,
+    run_phase_gate_checks,
+    run_valdoz_audit,
+    approve_phase,
+    advance_phase,
+    verify_audit_log_integrity,
+    verify_phase_integrity,
+    start_slice,
+    done_slice,
+    approve_slice,
+)
+
+# Inspect current project state
+state = load_state(project_root)
+
+# Run phase gate verification programmatically
+report = run_phase_gate_checks(project_root, phase_num=1)
+if report.passed:
+    print("Gate verified!")
+
+# Verify cryptographic audit trail
+valid, violations = verify_audit_log_integrity(project_root)
+```
+
+---
+
+## 15. Complete CLI Command Reference
 
 | Command | Description |
 |---|---|
 | `valdoz --version` | Display ValdoZ version. |
-| `valdoz project init [--name <n>] [--lang ar] [--skip-scan]` | Intelligent init: scans project maturity, auto-places phase, applies fixes. |
+| `valdoz project init [--name <n>] [--lang ar] [--skip-scan] [--require-human-signoff]` | Intelligent init: scans project maturity, auto-places phase, applies fixes. |
 | `valdoz explain [--output-file <file>]` | Generate an executive narrative of project progression, timeline, and cryptographic sign-offs. |
 | `valdoz mcp register` | Register ValdoZ MCP server into `~/.gemini/config/mcp_config.json`. |
 | `valdoz mcp run` | Launch standard stdio Model Context Protocol (MCP) server. |

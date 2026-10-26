@@ -30,7 +30,7 @@ valdoz mcp register
 ### 2. Initialize in your Repository
 ```bash
 cd /path/to/your-project
-valdoz project init              # Scans maturity & auto-places phase (or --lang ar)
+valdoz project init              # Scans maturity & auto-places phase (or --lang ar, --require-human-signoff)
 valdoz sync-runtimes             # Generate Antigravity rules & skills
 valdoz hook install              # Enforce role locks & CD push protection
 ```
