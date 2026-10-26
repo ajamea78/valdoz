@@ -522,8 +522,8 @@ Historically, gates required an interactive terminal (`sys.stdin.isatty()`) to p
 ValdoZ now features a **Human Non-Repudiation In-Chat Bridge**:
 1. When Antigravity completes deliverables for a phase, it prompts you in the chat with a summary.
 2. An interactive confirmation modal (`ask_question` or user decision) prompts you to confirm approval.
-3. Upon your explicit selection, a secure cryptographic verification token is issued (`valdoz-human-phase-<N>-<timestamp>`), allowing the phase to be approved without leaving the conversation.
-4. **Security Guarantee Preserved**: The AI agent cannot fabricate this token on its own; it requires explicit human interaction.
+3. Upon your explicit selection, a secure cryptographic verification token is issued (`valdoz-v1.<action>.<target>.<timestamp>.<nonce>.<sig>`), signed with a 256-bit HMAC-SHA256 project secret and a 5-minute TTL, allowing the phase to be approved without leaving the conversation.
+4. **Security Guarantee Preserved**: The AI agent cannot fabricate this token on its own; it requires explicit human interaction and HMAC signature verification. All unauthenticated fallback tokens are rejected.
 
 ### Live Generative UI Dashboard
 You can render a real-time, theme-aware visual dashboard directly in Antigravity chat:
@@ -557,17 +557,25 @@ valdoz heal slice --slice-id 01-user-auth
 # Auto-heal CI failure from diagnostic log file
 valdoz heal ci --log-file .valdoz/ci-logs/failure.txt
 ```
-During slice execution, you can also enable auto-healing automatically on failure:
+During slice execution, you can also enable auto-healing automatically on failure, or preview the proposed patch before applying:
 ```bash
+# Auto-heal slice failure
 valdoz slice done 01-user-auth --auto-heal
+
+# Preview proposed AI patch diff without writing to disk
+valdoz slice done 01-user-auth --auto-heal-preview
+
+# Preview patch diff during manual healing
+valdoz heal gate --preview
 ```
 
 #### How the Healing Loop Works:
 1. **Context Collection**: Extracts exact failure tracebacks, recent git diffs, implicated files, and slice specifications.
 2. **AI Root-Cause Diagnosis**: Analyzes why the failure occurred and formulates a minimal patch.
-3. **Targeted Code Application**: Applies the fix to the offending files.
-4. **Mechanical Re-Verification**: Automatically re-runs gate conditions or test suites.
-5. **Human Gate Intact**: Once passing, a `HealingReport` is generated for the human Tech Lead to review and approve before advancing.
+3. **Patch Diff Preview**: Computes unified diffs before disk writes; interactive terminal sessions prompt the user for confirmation.
+4. **Targeted Code Application**: Applies the fix to the offending files under quarantine protection.
+5. **Mechanical Re-Verification**: Automatically re-runs test suites or gate conditions.
+6. **Human Gate Intact**: Once passing, a `HealingReport` is generated for human review.
 
 ---
 
@@ -583,7 +591,97 @@ When generated with `--self-healing`, the workflow includes a dedicated `self-he
 
 ---
 
-## 11. Emergency Recovery & Troubleshooting
+## 11. Enterprise Governance & Trust
+
+ValdoZ provides cryptographic non-repudiation and team delivery guardrails designed for high-assurance workflows.
+
+### 1. Cryptographic Hash-Chained Audit Trail
+Phase approvals and major state transitions are recorded in an append-only, cryptographic hash-chained ledger at `.valdoz/approvals.log`.
+Each block contains:
+$$\text{entry\_hash} = \text{SHA256}(\text{prev\_hash} \parallel \text{timestamp} \parallel \text{message})$$
+
+- If any line is altered, deleted, or reordered, `valdoz gate check` and `verify_phase_integrity()` fail immediately with `TamperError`.
+- State file (`state.json`) approval hashes must cross-verify against the ledger tip.
+
+### 2. Split Approval Keys (M-of-N Quorum)
+For mission-critical phases (such as Phase 8 Deploy or Phase 9 Handover), ValdoZ supports multi-sign-off policies in `.valdozrc.json`:
+```json
+{
+  "governance": {
+    "quorum": {
+      "8": 2,
+      "9": 2,
+      "default": 1
+    }
+  }
+}
+```
+When configured, `valdoz phase approve` requires $M$ distinct verified human tokens before advancing.
+
+### 3. Time-Locked Phases (Anti-Rubber-Stamping)
+To prevent agents or teams from rushing past architecture or security phases without review, configure minimum dwell times:
+```json
+{
+  "governance": {
+    "time_locks": {
+      "4": 15,
+      "8": 5,
+      "default": 0
+    }
+  }
+}
+```
+Approving before the dwell time elapses raises `TimeLockViolationError` (unless overridden with `--emergency-bypass`).
+
+---
+
+## 12. AI Agent Oversight & Anomaly Controls
+
+### 1. Behavioral Budgets per Phase
+Track how many file writes and tool calls an agent performs per phase in `.valdoz/sessions/telemetry.json`:
+```json
+{
+  "oversight": {
+    "behavioral_budget": {
+      "1": 20,
+      "2": 20,
+      "6": 250
+    }
+  }
+}
+```
+If an AI agent enters an infinite retry loop or starts indiscriminately editing files, ValdoZ raises an anomaly alert and halts execution.
+
+### 2. Semantic Diff Reviews
+Before AI-generated code patches are applied, ValdoZ leverages the LLM bridge to generate concise 3–5 bullet point plain-English summaries of changes, persisted to `.valdoz/history/semantic_diffs.jsonl`.
+
+### 3. Pre-Build Intent Declarations
+Before initiating complex builds, the agent declares its planned architecture changes in `.valdoz/intents/phase-<N>.md`. Gate checks ensure that deliverables align with declared intent.
+
+### 4. Executive Narrative Generator (`valdoz explain`)
+Generate a human-readable narrative of the entire project lifecycle, timeline, and cryptographic sign-offs:
+```bash
+# Print narrative in terminal
+valdoz explain
+
+# Export executive audit report to markdown
+valdoz explain --output-file docs/audit-report.md
+```
+
+### 5. Webhook Notifications
+Receive HTTP POST alerts on lifecycle events (`phase.approved`, `phase.advanced`, `slice.gated`) by configuring endpoints in `.valdozrc.json`:
+```json
+{
+  "webhooks": [
+    "https://hooks.slack.com/services/...",
+    "https://api.mycompany.com/valdoz/events"
+  ]
+}
+```
+
+---
+
+## 13. Emergency Recovery & Troubleshooting
 
 ### If an Approved Phase Needs Changes (`reopen`)
 If a discovery in Phase 6 requires modifying the Architecture from Phase 4:
@@ -615,16 +713,17 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 
 ---
 
-## 12. Complete CLI Command Reference
+## 14. Complete CLI Command Reference
 
 | Command | Description |
 |---|---|
 | `valdoz --version` | Display ValdoZ version. |
 | `valdoz project init [--name <n>] [--lang ar] [--skip-scan]` | Intelligent init: scans project maturity, auto-places phase, applies fixes. |
+| `valdoz explain [--output-file <file>]` | Generate an executive narrative of project progression, timeline, and cryptographic sign-offs. |
 | `valdoz mcp register` | Register ValdoZ MCP server into `~/.gemini/config/mcp_config.json`. |
 | `valdoz mcp run` | Launch standard stdio Model Context Protocol (MCP) server. |
 | `valdoz dashboard [--output <file>]` | Generate live Generative UI interactive dashboard HTML. |
-| `valdoz heal [gate\|audit\|slice\|ci] [--slice-id <id>] [--log-file <path>]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices/CI runs. |
+| `valdoz heal [target] [--slice-id <id>] [--preview] [--yes]` | Run autonomous AI diagnosis and self-healing for failed gates/audits/slices/CI runs. |
 | `valdoz sync-runtimes [--dry-run]` | Generate Antigravity rules and skill playbooks. |
 | `valdoz hook install` | Install Git pre-commit and pre-push hooks (role separation + live push protection). |
 | `valdoz ci generate [--self-healing]` | Generate GitHub Actions CI workflow (with optional self-healing PR recovery). |
@@ -634,11 +733,11 @@ Checks virtualenv status, Python version drift, state write protection, and stal
 | `valdoz session clear` | Clear stale session locks. |
 | `valdoz phase status` | View current phase, required deliverables, and whitelist. |
 | `valdoz phase next` | Advance to the next phase after approval. |
-| `valdoz phase approve` | Human-only interactive TTY or in-chat approval of deliverables. |
+| `valdoz phase approve [--human-token <tok>]` | Human-only interactive TTY or in-chat approval of deliverables (with M-of-N and time-lock enforcement). |
 | `valdoz phase reopen <N>` | Reopen a past phase and void downstream approvals. |
 | `valdoz gate check [--ci] [--dry-run]` | Run deliverable, heading, placeholder, and citation checks. |
 | `valdoz slice start <id>` | Open a Phase 6 build slice. |
-| `valdoz slice done <id> [--auto-heal]` | Check 3 slice gate conditions; optionally auto-heal failures. |
+| `valdoz slice done <id> [--auto-heal] [--auto-heal-preview]` | Check 3 slice gate conditions with real test execution; optionally preview or apply auto-healing. |
 | `valdoz slice approve <id>` | Human-only interactive approval of a build slice. |
 | `valdoz slice status` | List all slices and their states. |
 | `valdoz decision add -q <q> -c <choice> -r <why>` | Append to `decisions.jsonl` and update `decisions.md`. |

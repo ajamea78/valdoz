@@ -21,7 +21,9 @@ Autonomous AI coding agents like **Google Antigravity** are fast, but left uncon
 5. **Autonomous Self-Healing**: Automated diagnosis, code patching, and gate re-verification for local development and CI/CD pipelines with strict security quarantine.
 6. **Continuous Deployment Protection**: Built-in Git `pre-push` hooks block accidental pushes to production branches until Phase 8 (Deploy) is human-approved.
 7. **Project-Scoped Credential Vaults & Multi-Account Isolation**: Each repository maintains its own isolated credential store (`.valdoz/.git-credentials`, `chmod 600`), stopping token collisions and identity leaks across personal, work, and client GitHub accounts.
-8. **Cryptographic Human Sign-Off**: Phase and slice approvals require HMAC-SHA256 signed human tokens with ephemeral project secrets and 5-minute TTL. AI agents cannot forge approval tokens.
+8. **Cryptographic Human Sign-Off**: Phase and slice approvals require full 256-bit HMAC-SHA256 signed human tokens with unique nonces and 5-minute TTL. Unauthenticated token fallbacks are strictly prohibited.
+9. **Cryptographic Hash-Chained Audit Trail**: Append-only hash-chained ledger (`.valdoz/approvals.log`) ensures non-repudiation and detects retroactive log modifications.
+10. **Enterprise Governance & Oversight**: Supports M-of-N multi-human sign-off quorums for high-stakes phases, review dwell time-locks, AI behavioral budgets, and executive narrative reporting (`valdoz explain`).
 
 ---
 

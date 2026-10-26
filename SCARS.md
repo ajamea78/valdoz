@@ -16,3 +16,7 @@ command; [advisory] no automated check, follow manually.
 10. **SCAR-010** [advisory]: Verify Python syntax and dependency lock via the project venv.
 11. **SCAR-011** [enforced]: Output permanent branch domains only (no preview-hash URLs).
 12. **SCAR-012** [on-demand]: Enforce visual regression threshold against a committed baseline (`valdoz visual-diff`).
+13. **SCAR-013** [enforced]: Cryptographic approval tokens must strictly enforce full 256-bit HMAC signatures; never permit unauthenticated timestamp fallbacks.
+14. **SCAR-014** [enforced]: Slice completion gates must execute real automated test suites before advancing to `gated`.
+15. **SCAR-015** [enforced]: Approvals logs must maintain an immutable cryptographic hash chain to prevent retroactive log editing or truncation.
+16. **SCAR-016** [enforced]: Central state file (`state.json`) approval records must cross-verify against the cryptographic audit ledger.

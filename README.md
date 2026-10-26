@@ -61,7 +61,9 @@ valdoz phase next
 - **Builder / Scribe Concurrency**: Multi-agent sessions are partitioned by file domains. Builders write code and tests; Scribes write specifications and logs.
 - **Phase 6 Build Slices**: Work is broken into small, reviewable slices (`valdoz slice start / done / approve`) evaluated against the Three Slice Gate Conditions.
 - **Adversarial Content Defenses**: Mandatory pre-fetch intent logging (`valdoz research log`) and boundary wrapping (`valdoz research fetch`).
-- **Write-Protected State**: Deliverables are SHA-256 hashed on approval, and `state.json` is locked (`chmod 444`). Tampering is detected immediately.
+- **Write-Protected State & Hash-Chained Audit Trail**: Deliverables are SHA-256 hashed on approval, `state.json` is locked (`chmod 444`), and all approvals form a cryptographic hash chain. Tampering is detected immediately.
+- **Enterprise Governance & Quorums**: M-of-N human approval quorums for high-stakes phases, review dwell time-locks, and AI behavioral budgets.
+- **Executive Reporting**: Generate executive narratives and handover audit reports on-demand (`valdoz explain`).
 - **State Repair**: Reconstruct `state.json` from git history at any time with `valdoz state repair`.
 
 ---
