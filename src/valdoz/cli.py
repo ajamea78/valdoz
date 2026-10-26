@@ -124,6 +124,7 @@ def project_init(
     lang: str = typer.Option("en", "--lang", "-l", help="Language for client deliverables: en or ar"),
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Developer Git & GitHub profile to bind to this project"),
     skip_scan: bool = typer.Option(False, "--skip-scan", help="Skip intelligent project scanning"),
+    require_human_signoff: bool = typer.Option(False, "--require-human-signoff", help="Do not auto-approve pre-existing phases without human approval"),
 ):
     """Initializes ValdoZ project state in the current repository."""
     root = find_project_root()
@@ -223,7 +224,10 @@ def project_init(
         console.print(f"\n[bold]→ Auto-placing at Phase {assessment.recommended_phase} "
                       f"({PHASE_NAMES.get(assessment.recommended_phase, '?')})[/bold]")
         if assessment.pre_approved_phases:
-            console.print(f"  [dim]Pre-approving phases: {', '.join(str(p) for p in assessment.pre_approved_phases)}[/dim]")
+            if require_human_signoff:
+                console.print(f"  [dim]Pre-approval skipped (--require-human-signoff active): phases {', '.join(str(p) for p in assessment.pre_approved_phases)} will require manual sign-off.[/dim]")
+            else:
+                console.print(f"  [dim]Pre-approving phases (unverified): {', '.join(str(p) for p in assessment.pre_approved_phases)}[/dim]")
 
     # ── Create State ───────────────────────────────────────────────────
     starting_phase = assessment.recommended_phase if assessment else 0
@@ -236,7 +240,16 @@ def project_init(
     )
 
     # Pre-approve phases the scanner confirmed are already done
-    if assessment and assessment.pre_approved_phases:
+    if assessment and assessment.pre_approved_phases and not require_human_signoff:
+        console.print(
+            Panel.fit(
+                "[bold yellow]⚠ Governance Notice: Fast-Forwarding Pre-Existing Phases[/bold yellow]\n"
+                "The auto-scanner has pre-approved detected phases with status 'auto-scanner (unverified)'.\n"
+                "To enforce strict human cryptographic sign-off from Phase 0, initialize with --require-human-signoff.",
+                title="Brownfield Fast-Forward Warning",
+                border_style="yellow",
+            )
+        )
         from valdoz.phases import append_approvals_log, get_required_deliverables
         from valdoz.state import compute_deliverables_hash, compute_file_sha256
 
@@ -266,14 +279,14 @@ def project_init(
                 p_name = PHASE_NAMES.get(p_num, f"Phase {p_num}")
 
                 state.phases[p_key].status = "approved"
-                state.phases[p_key].approved_by = "auto-scanner"
+                state.phases[p_key].approved_by = "auto-scanner (unverified)"
                 state.phases[p_key].approved_at = now_iso
                 state.phases[p_key].approval_hash = comp_hash
                 state.phases[p_key].deliverable_hashes = deliverable_hashes
 
                 append_approvals_log(
                     root,
-                    f"Phase {p_num} ({p_name}) approved by auto-scanner at {now_iso}. "
+                    f"Phase {p_num} ({p_name}) approved by auto-scanner (unverified) at {now_iso}. "
                     f"Composite hash: {comp_hash[:16]}... "
                     f"Deliverables hashed: {len(deliverable_hashes)}.",
                 )
@@ -577,6 +590,17 @@ def research_log(
     console.print(f"[bold green]Pre-logged intent {entry.id}:[/bold green] '{entry.url}' (Pending Fetch)")
 
 
+MAX_RESEARCH_FETCH_BYTES = 1_048_576  # 1MB response limit
+FORBIDDEN_FETCH_HOSTS = {
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata",
+    "localhost",
+    "127.0.0.1",
+    "::1",
+}
+
+
 @research_app.command("fetch")
 def research_fetch(
     url: str = typer.Argument(..., help="URL to safely fetch and sanitize"),
@@ -587,15 +611,33 @@ def research_fetch(
         console.print(f"[bold red]Fetch Failed:[/bold red] Forbidden URL scheme '{parsed.scheme}'. Only http and https are allowed.")
         raise typer.Exit(1)
 
+    hostname = (parsed.hostname or "").lower()
+    if not hostname or hostname in FORBIDDEN_FETCH_HOSTS or hostname.endswith(".internal"):
+        console.print(f"[bold red]Fetch Blocked:[/bold red] Destination host '{hostname}' is not permitted (metadata or loopback address).")
+        raise typer.Exit(1)
+
     try:
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "ValdoZ-SanitizedFetcher/3.0"},
         )
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
-            raw_text = response.read().decode("utf-8", errors="replace")
+            content_type = response.headers.get("Content-Type", "")
+            allowed_content_types = ("text/", "application/json", "application/xml", "application/javascript")
+            if content_type and not any(content_type.lower().startswith(act) for act in allowed_content_types):
+                console.print(f"[bold red]Fetch Blocked:[/bold red] Unsupported Content-Type '{content_type}'. Only text or data documents are allowed.")
+                raise typer.Exit(1)
+
+            content_bytes = response.read(MAX_RESEARCH_FETCH_BYTES + 1)
+            if len(content_bytes) > MAX_RESEARCH_FETCH_BYTES:
+                console.print(f"[bold red]Fetch Blocked:[/bold red] Content size exceeds maximum limit of 1MB ({MAX_RESEARCH_FETCH_BYTES} bytes).")
+                raise typer.Exit(1)
+
+            raw_text = content_bytes.decode("utf-8", errors="replace")
         wrapped = sanitize_and_wrap_content(raw_text, source_url=url)
         console.print(wrapped)
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[bold red]Fetch Failed:[/bold red] {e}")
         raise typer.Exit(1)

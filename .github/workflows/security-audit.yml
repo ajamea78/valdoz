@@ -48,3 +48,7 @@ jobs:
           uv pip install -e ".[dev]" || true
           uvx bandit -r src/valdoz -ll
           uvx pip-audit
+
+      - name: Static Type Checking
+        run: |
+          uvx mypy src/valdoz --ignore-missing-imports || true

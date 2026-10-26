@@ -3,7 +3,9 @@
 import subprocess
 import pytest
 from pathlib import Path
+from typer.testing import CliRunner
 from valdoz.approval import approve_phase
+from valdoz.cli import app
 from valdoz.gates import run_phase_gate_checks
 from valdoz.integration import install_ci_workflow, install_git_hook
 from valdoz.logs import add_decision, pre_log_research_intent
@@ -206,3 +208,57 @@ Run auth tests.
     assert reloaded.phases["2"].status == "approved"
     assert reloaded.phases["3"].status == "approved"
     assert is_write_protected(get_state_path(git_project))
+
+
+def test_cli_full_lifecycle_e2e(tmp_path: Path, monkeypatch):
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+
+    # 1. Project Init
+    res_init = runner.invoke(app, ["project", "init", "--name", "e2e-demo", "--skip-scan"])
+    assert res_init.exit_code == 0
+    assert (tmp_path / ".valdoz" / "state.json").exists()
+
+    # Approve Phase 0 and advance to Phase 1 (Intake)
+    approve_phase(tmp_path, phase_num=0, enforce_tty=False, confirmation_input="init")
+    res_next0 = runner.invoke(app, ["phase", "next"])
+    assert res_next0.exit_code == 0
+    assert "Successfully advanced to Phase 1" in res_next0.output
+
+    # 2. Gate check initially fails because docs/01-intake.md is missing
+    res_gate = runner.invoke(app, ["gate", "check"])
+    assert res_gate.exit_code != 0
+    assert "Gate Failed" in res_gate.output
+
+    # 3. Create required deliverable
+    intake_doc = tmp_path / "docs" / "01-intake.md"
+    intake_doc.parent.mkdir(parents=True, exist_ok=True)
+    intake_doc.write_text("""# Project Intake
+## Client Brief
+Verbatim user request here.
+## Assumptions
+All microservices run on Kubernetes.
+## Risks
+Network latency between services.
+## Stakeholders
+Architecture board and product leads.
+""")
+
+    # 4. Gate check now passes
+    res_gate_pass = runner.invoke(app, ["gate", "check"])
+    assert res_gate_pass.exit_code == 0
+    assert "Gate Passed" in res_gate_pass.output
+
+    # 5. Approve Phase 1 and advance
+    approve_phase(tmp_path, phase_num=1, enforce_tty=False, confirmation_input="intake")
+    res_next = runner.invoke(app, ["phase", "next"])
+    assert res_next.exit_code == 0
+    assert "Successfully advanced to Phase 2" in res_next.output
+
+    # 6. valdoz explain outputs project history narrative
+    res_explain = runner.invoke(app, ["explain"])
+    assert res_explain.exit_code == 0
+    assert "Executive Narrative: e2e-demo" in res_explain.output
+    assert "Phase 1: Intake" in res_explain.output
+
+

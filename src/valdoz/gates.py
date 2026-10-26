@@ -16,6 +16,7 @@ from valdoz.phases import (
     PHASE_DELIVERABLES,
     PHASE_NAMES,
     get_required_deliverables,
+    verify_audit_log_integrity,
 )
 from valdoz.state import (
     ValdozState,
@@ -181,6 +182,18 @@ def run_phase_gate_checks(
     phase_name = PHASE_NAMES.get(target_phase, f"Phase {target_phase}")
 
     checks: List[GateCheck] = []
+
+    # 0. Global Hash-Chained Audit Log Integrity
+    chain_valid, chain_errs = verify_audit_log_integrity(project_root)
+    checks.append(
+        GateCheck(
+            id="audit-log-integrity",
+            name="Cryptographic Audit Log Hash Chain",
+            severity="blocking",
+            passed=chain_valid,
+            message="Audit log hash chain is cryptographically intact" if chain_valid else f"Audit log compromised: {'; '.join(chain_errs)}",
+        )
+    )
 
     # 1. Prior phases integrity check
     for p in range(0, target_phase):

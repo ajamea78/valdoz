@@ -269,6 +269,43 @@ def test_core():
     assert s.status == "gated"
 
 
+def test_cli_research_fetch_security(run_in_tmp: Path):
+    # Forbidden scheme
+    res_ftp = runner.invoke(app, ["research", "fetch", "ftp://example.com/data.txt"])
+    assert res_ftp.exit_code != 0
+    assert "Forbidden URL scheme" in res_ftp.output
+
+    # Forbidden metadata IP
+    res_meta = runner.invoke(app, ["research", "fetch", "http://169.254.169.254/latest/meta-data/"])
+    assert res_meta.exit_code != 0
+    assert "Destination host '169.254.169.254' is not permitted" in res_meta.output
+
+    # Forbidden localhost
+    res_local = runner.invoke(app, ["research", "fetch", "http://localhost:8080/secret"])
+    assert res_local.exit_code != 0
+    assert "not permitted" in res_local.output
+
+
+def test_cli_project_init_brownfield_and_signoff_flag(run_in_tmp: Path):
+    # Setup brownfield repo indicators
+    (run_in_tmp / "src").mkdir()
+    (run_in_tmp / "src" / "main.py").write_text("print('hello')")
+    (run_in_tmp / "docs").mkdir()
+    (run_in_tmp / "docs" / "01-intake.md").write_text("# Intake")
+    (run_in_tmp / "pyproject.toml").write_text("[project]\nname = 'demo'")
+
+    # Initialize with --require-human-signoff
+    res = runner.invoke(app, ["project", "init", "--require-human-signoff"])
+    assert res.exit_code == 0
+    assert "Pre-approval skipped" in res.output
+
+    from valdoz.state import load_state
+    state = load_state(run_in_tmp)
+    # Check that phase 1 is not auto-approved
+    assert state.phases["1"].status != "approved"
+
+
+
 
 
 

@@ -10,6 +10,7 @@ Inspired by modern AI-driven CI/CD remediation workflows:
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -20,6 +21,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from valdoz.sdk_bridge import FreeLLMAPIConfig, generate_freellmapi_config
+
+MAX_PATCH_FILE_BYTES = 512_000  # 500 KB per file cap to prevent disk-exhaustion DoS
+FORBIDDEN_AI_HOSTS = {"169.254.169.254", "metadata.google.internal", "metadata"}
 
 
 class HealingContext(BaseModel):
@@ -153,7 +157,7 @@ def parse_ai_patch_response(response_text: str) -> Dict[str, str]:
 
 
 def apply_patch(project_root: Path, file_patches: Dict[str, str]) -> List[str]:
-    """Applies file patches to disk and returns the list of modified paths."""
+    """Applies file patches to disk after strict sanitization, syntax validation, and quarantine checks."""
     applied = []
     root_resolved = project_root.resolve()
 
@@ -167,11 +171,25 @@ def apply_patch(project_root: Path, file_patches: Dict[str, str]) -> List[str]:
     )
 
     for rel_path, content in file_patches.items():
+        if "\0" in rel_path or "\0" in content:
+            continue
+
         clean_rel = Path(rel_path).as_posix().lstrip("/")
 
         # Security Quarantine: block writes to git, valdoz internals, CI, and package manifests
         if any(clean_rel.startswith(p) or clean_rel == p for p in FORBIDDEN_PREFIXES):
             continue
+
+        # Cap individual patch size
+        if len(content.encode("utf-8")) > MAX_PATCH_FILE_BYTES:
+            continue
+
+        # Syntax check for Python patches: reject invalid syntax
+        if clean_rel.endswith(".py"):
+            try:
+                ast.parse(content)
+            except SyntaxError:
+                continue
 
         dest = (root_resolved / clean_rel).resolve()
         try:
@@ -206,6 +224,10 @@ def mock_or_call_ai(prompt: str, model_config: Optional[Dict[str, Any]] = None) 
             parsed = urllib.parse.urlparse(base_url)
             if parsed.scheme not in ("http", "https"):
                 return f"Root Cause: Invalid AI base URL scheme '{parsed.scheme}'. Only http and https are permitted."
+
+            hostname = (parsed.hostname or "").lower()
+            if hostname in FORBIDDEN_AI_HOSTS or hostname.startswith("169.254."):
+                return f"Root Cause: Security rejection: AI base URL cannot target cloud metadata or link-local endpoints ('{hostname}')."
 
             req_data = json.dumps({
                 "model": model_name,

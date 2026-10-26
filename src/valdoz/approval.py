@@ -316,5 +316,3 @@ def approve_phase(
         pass
 
     return deliverable_hashes
-
-    return deliverable_hashes

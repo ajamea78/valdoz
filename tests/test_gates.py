@@ -118,3 +118,37 @@ Engineering lead and client product manager.
 """)
     report = run_phase_gate_checks(temp_project, phase_num=1)
     assert report.passed is True
+
+
+def test_gate_check_fails_on_tampered_audit_log(temp_project: Path):
+    from valdoz.phases import append_approvals_log
+    intake_doc = temp_project / "docs" / "01-intake.md"
+    intake_doc.parent.mkdir(parents=True, exist_ok=True)
+    intake_doc.write_text("""# Intake
+## Client Brief
+Verbatim client brief.
+## Assumptions
+No legacy migration.
+## Risks
+External API rate limits.
+## Stakeholders
+Engineering lead and client product manager.
+""")
+    # Add an entry to approvals log
+    append_approvals_log(temp_project, "Phase 0 approved by human")
+    report = run_phase_gate_checks(temp_project, phase_num=1)
+    assert report.passed is True
+
+    # Tamper with approvals log
+    log_file = temp_project / ".valdoz" / "approvals.log"
+    content = log_file.read_text()
+    log_file.write_text(content.replace("Phase 0 approved by human", "Phase 0 FORGED"))
+
+    # Gate check must block immediately on audit log integrity
+    report_tampered = run_phase_gate_checks(temp_project, phase_num=1)
+    assert report_tampered.passed is False
+    audit_checks = [c for c in report_tampered.checks if c.id == "audit-log-integrity"]
+    assert len(audit_checks) == 1
+    assert audit_checks[0].passed is False
+    assert "compromised" in audit_checks[0].message
+
