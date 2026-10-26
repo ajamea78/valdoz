@@ -117,7 +117,7 @@ def clear_project_vault(project_root: Path) -> bool:
 
     # Unset local credential configs
     if (project_root / ".git").exists():
-        subprocess.run(["git", "config", "--local", "--unset", "credential.helper"], cwd=project_root, check=False)
+        subprocess.run(["git", "config", "--local", "--unset-all", "credential.helper"], cwd=project_root, check=False)
 
     return deleted
 

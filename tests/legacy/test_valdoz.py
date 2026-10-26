@@ -16,6 +16,8 @@ import pytest
 from typer.testing import CliRunner
 
 MAIN = Path(os.environ.get("VALDOZ_MAIN", Path.home() / ".valdoz/cli/main.py"))
+if not MAIN.exists():
+    pytest.skip(f"Legacy v2 CLI not found at {MAIN}", allow_module_level=True)
 spec = importlib.util.spec_from_file_location("valdoz_main", MAIN)
 vz = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vz)

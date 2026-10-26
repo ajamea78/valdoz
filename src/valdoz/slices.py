@@ -169,20 +169,72 @@ def start_slice(project_root: Path, slice_id: str) -> SliceState:
     return slice_state
 
 
+def run_slice_test_suite(project_root: Path) -> Tuple[bool, str]:
+    """Runs the project's automated test suite (pytest or npm test) and returns (passed, trace)."""
+    has_pyproject = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
+    has_package_json = (project_root / "package.json").exists()
+    tests_dir = project_root / "tests"
+
+    try:
+        if has_pyproject or (tests_dir.exists() and list(tests_dir.glob("**/*.py"))):
+            res = subprocess.run(
+                [sys.executable, "-m", "pytest", "-q"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = (res.stdout + "\n" + res.stderr).strip()
+            return res.returncode == 0, output
+        elif has_package_json:
+            res = subprocess.run(
+                ["npm", "test"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = (res.stdout + "\n" + res.stderr).strip()
+            return res.returncode == 0, output
+        else:
+            return True, "No automated test suite detected."
+    except Exception as e:
+        return False, f"Test runner execution error: {e}"
+
+
 def done_slice(
     project_root: Path,
     slice_id: str,
-    pre_existing_tests_pass: bool = True,
-    new_tests_pass: bool = True,
+    pre_existing_tests_pass: Optional[bool] = None,
+    new_tests_pass: Optional[bool] = None,
     coverage_delta: float = 0.0,
     min_coverage_threshold: float = 0.0,
+    run_tests: bool = True,
 ) -> SliceState:
-    """Validates completion of a slice against the Three Slice Gate Conditions."""
+    """Validates completion of a slice against the Three Slice Gate Conditions.
+
+    Executes real project test suites by default rather than relying on unverified boolean flags.
+    """
     slice_state = load_slice(project_root, slice_id)
     if slice_state.status != "open":
         raise SliceError(
             f"Slice '{slice_id}' is not in 'open' state (current: '{slice_state.status}')."
         )
+
+    # If test pass flags not explicitly supplied, run real automated tests
+    if run_tests and pre_existing_tests_pass is None and new_tests_pass is None:
+        passed, trace = run_slice_test_suite(project_root)
+        if not passed:
+            raise SliceGateConditionError(
+                f"Slice Gate Condition FAILED: Automated tests failed for slice '{slice_id}':\n{trace}"
+            )
+        pre_existing_tests_pass = True
+        new_tests_pass = True
+    else:
+        if pre_existing_tests_pass is None:
+            pre_existing_tests_pass = True
+        if new_tests_pass is None:
+            new_tests_pass = True
 
     # Check Three Slice Gate Conditions:
     # Condition (a): pre-existing tests pass
@@ -209,6 +261,21 @@ def done_slice(
     slice_state.tests_passed = True
     slice_state.coverage_delta = coverage_delta
     save_slice(project_root, slice_state)
+
+    try:
+        from valdoz.webhooks import emit_webhook_event
+        emit_webhook_event(
+            project_root,
+            "slice.gated",
+            {
+                "slice_id": slice_id,
+                "status": "gated",
+                "coverage_delta": coverage_delta,
+            },
+        )
+    except Exception:
+        pass
+
     return slice_state
 
 

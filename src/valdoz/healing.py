@@ -299,13 +299,57 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
     return True
 
 
+def generate_patch_diff(project_root: Path, file_patches: Dict[str, str]) -> str:
+    """Computes unified diff between disk files and proposed AI patches without modifying disk."""
+    import difflib
+    diff_lines: List[str] = []
+    root_resolved = project_root.resolve()
+
+    for rel_path, new_content in file_patches.items():
+        clean_rel = Path(rel_path).as_posix().lstrip("/")
+        dest = (root_resolved / clean_rel).resolve()
+        old_content = ""
+        if dest.exists() and dest.is_file():
+            try:
+                old_content = dest.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                old_content = ""
+
+        old_lines = old_content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+        diff = list(difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=f"a/{clean_rel}",
+            tofile=f"b/{clean_rel}",
+        ))
+        if diff:
+            diff_lines.extend(diff)
+        else:
+            diff_lines.append(f"--- /dev/null\n+++ b/{clean_rel}\n")
+            diff_lines.extend(f"+{line}" for line in new_lines)
+
+    return "".join(diff_lines)
+
+
 def run_healing_loop(
     project_root: Path,
     ctx: HealingContext,
     max_retries: int = 3,
     model_config: Optional[Dict[str, Any]] = None,
+    preview: bool = False,
+    preview_callback: Optional[Any] = None,
 ) -> HealingReport:
-    """Executes the autonomous diagnosis, patch, and re-verification loop."""
+    """Executes the autonomous diagnosis, patch, and re-verification loop.
+
+    Args:
+        project_root: Repository root directory.
+        ctx: Failure context containing traces and failing files.
+        max_retries: Maximum diagnosis and patch iterations.
+        model_config: Optional custom model configuration.
+        preview: When True, computes and returns proposed diff without modifying disk.
+        preview_callback: Optional callable(diff: str, patches: dict) -> bool for confirmation.
+    """
     attempts = 0
     success = False
     applied_files: List[str] = []
@@ -323,24 +367,35 @@ def run_healing_loop(
         cause_match = re.search(r"Root Cause:\s*(.+?)(?=\n\n|FILE:|$)", ai_resp, re.DOTALL | re.IGNORECASE)
         root_cause = cause_match.group(1).strip() if cause_match else ai_resp[:200]
 
-        # Parse and apply patch
+        # Parse patch
         patches = parse_ai_patch_response(ai_resp)
         if patches:
+            patch_diff = generate_patch_diff(project_root, patches)
+
+            if preview:
+                return HealingReport(
+                    success=False,
+                    attempt_count=attempts,
+                    root_cause=root_cause,
+                    patch_diff=patch_diff,
+                    verification_passed=False,
+                    applied_files=[],
+                    human_review_summary=f"Diff preview generated for {len(patches)} file(s). No changes written to disk.",
+                )
+
+            if preview_callback and not preview_callback(patch_diff, patches):
+                return HealingReport(
+                    success=False,
+                    attempt_count=attempts,
+                    root_cause=root_cause,
+                    patch_diff=patch_diff,
+                    verification_passed=False,
+                    applied_files=[],
+                    human_review_summary="Patch application cancelled by user.",
+                )
+
             applied = apply_patch(project_root, patches)
             applied_files.extend(applied)
-
-            # Capture patch diff
-            try:
-                proc = subprocess.run(
-                    ["git", "diff", *applied],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                patch_diff = proc.stdout.strip()
-            except Exception:
-                patch_diff = "\n".join(f"Updated {f}" for f in applied)
 
             # Re-verify
             passed = verify_after_patch(project_root, ctx)

@@ -237,16 +237,52 @@ def project_init(
 
     # Pre-approve phases the scanner confirmed are already done
     if assessment and assessment.pre_approved_phases:
-        for p_num in assessment.pre_approved_phases:
+        from valdoz.phases import append_approvals_log, get_required_deliverables
+        from valdoz.state import compute_deliverables_hash, compute_file_sha256
+
+        for p_num in sorted(assessment.pre_approved_phases):
             p_key = str(p_num)
             if p_key in state.phases:
+                req_files = get_required_deliverables(p_num)
+                deliverable_hashes: Dict[str, str] = {}
+                missing: List[str] = []
+
+                for rel_path in req_files:
+                    fpath = root / rel_path
+                    if fpath.exists():
+                        h = compute_file_sha256(fpath)
+                        if h:
+                            deliverable_hashes[rel_path] = h
+                    else:
+                        missing.append(rel_path)
+
+                if missing:
+                    # Keep as in_progress/pending if required deliverables are absent
+                    state.phases[p_key].status = "in_progress" if p_num == starting_phase else "pending"
+                    continue
+
+                comp_hash = compute_deliverables_hash(deliverable_hashes)
+                now_iso = datetime.now(timezone.utc).isoformat()
+                p_name = PHASE_NAMES.get(p_num, f"Phase {p_num}")
+
                 state.phases[p_key].status = "approved"
                 state.phases[p_key].approved_by = "auto-scanner"
-                state.phases[p_key].approved_at = datetime.now(timezone.utc).isoformat()
+                state.phases[p_key].approved_at = now_iso
+                state.phases[p_key].approval_hash = comp_hash
+                state.phases[p_key].deliverable_hashes = deliverable_hashes
+
+                append_approvals_log(
+                    root,
+                    f"Phase {p_num} ({p_name}) approved by auto-scanner at {now_iso}. "
+                    f"Composite hash: {comp_hash[:16]}... "
+                    f"Deliverables hashed: {len(deliverable_hashes)}.",
+                )
+
         # Set current phase to in_progress
         curr_key = str(starting_phase)
         if curr_key in state.phases:
             state.phases[curr_key].status = "in_progress"
+            state.phases[curr_key].entered_at = datetime.now(timezone.utc).isoformat()
 
     # Store detected stack
     if assessment and assessment.detected_stack:
@@ -696,6 +732,7 @@ def slice_done_cmd(
     slice_id: str = typer.Argument(..., help="Slice identifier"),
     cov_delta: float = typer.Option(0.0, "--cov-delta", help="Test coverage delta percentage"),
     auto_heal: bool = typer.Option(False, "--auto-heal", help="Trigger autonomous self-healing on failure"),
+    auto_heal_preview: bool = typer.Option(False, "--auto-heal-preview", help="Preview proposed self-healing patch without applying"),
     retries: int = typer.Option(3, "--retries", help="Max healing attempts"),
 ):
     """Closes a slice with test evidence, evaluating the Three Slice Gate Conditions."""
@@ -707,17 +744,39 @@ def slice_done_cmd(
         console.print("Three Slice Gate Conditions verified: pre-existing tests pass, new tests pass, coverage maintained.")
     except SliceGateConditionError as e:
         console.print(f"[bold red]Slice Gate Condition Failure:[/bold red] {e}")
-        if auto_heal:
+        if auto_heal or auto_heal_preview:
             console.print("\n[bold cyan]🔧 Triggering ValdoZ Autonomous Self-Healing Engine...[/bold cyan]")
             from valdoz.healing import collect_failure_context, run_healing_loop
             ctx = collect_failure_context(root, failure_type="slice_gate", error_output=str(e), slice_id=slice_id)
-            report = run_healing_loop(root, ctx, max_retries=retries)
+
+            def confirm_preview(diff: str, patches: dict) -> bool:
+                console.print("\n[bold yellow]Proposed AI Healing Patch Diff:[/bold yellow]")
+                console.print(diff)
+                return typer.confirm("Apply this patch to disk?", default=False)
+
+            report = run_healing_loop(
+                root,
+                ctx,
+                max_retries=retries,
+                preview=auto_heal_preview,
+                preview_callback=confirm_preview if (not auto_heal_preview and sys.stdin.isatty()) else None,
+            )
+
+            if auto_heal_preview and report.patch_diff:
+                console.print("\n[bold yellow]Healing Diff Preview (Dry-Run):[/bold yellow]")
+                console.print(report.patch_diff)
+                console.print("[dim]Run with --auto-heal to apply changes.[/dim]")
+                raise typer.Exit(1)
+
             if report.success:
                 console.print(f"[bold green]✓ {report.human_review_summary}[/bold green]")
                 console.print(f"Applied fixes to: {', '.join(report.applied_files)}")
-                s = done_slice(root, slice_id, coverage_delta=max(cov_delta, 0.0))
-                console.print(f"[bold green]Slice '{s.slice_id}' completed successfully![/bold green] Status: [cyan]gated[/cyan].")
-                return
+                try:
+                    s = done_slice(root, slice_id, coverage_delta=max(cov_delta, 0.0))
+                    console.print(f"[bold green]Slice '{s.slice_id}' completed successfully![/bold green] Status: [cyan]gated[/cyan].")
+                    return
+                except SliceGateConditionError as post_err:
+                    console.print(f"[bold red]Tests still failing post-healing:[/bold red] {post_err}")
             else:
                 console.print(f"[bold red]✗ Self-healing exhausted:[/bold red] {report.root_cause}")
         raise typer.Exit(1)
@@ -967,6 +1026,8 @@ def heal_cmd(
     slice_id: Optional[str] = typer.Option(None, "--slice-id", "-s", help="Slice identifier if healing a slice"),
     log_file: Optional[Path] = typer.Option(None, "--log-file", "-l", help="Optional log file containing error trace"),
     retries: int = typer.Option(3, "--retries", "-r", help="Maximum autonomous remediation iterations"),
+    preview: bool = typer.Option(False, "--preview", "-p", help="Preview proposed AI patch diff without writing to disk"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm patch application without prompt"),
 ):
     """Runs autonomous AI diagnosis and self-healing for failed gates, audits, slices, or CI runs."""
     root = find_project_root()
@@ -1029,7 +1090,25 @@ def heal_cmd(
         error_output=error_output,
         slice_id=slice_id,
     )
-    report = run_healing_loop(root, ctx, max_retries=retries)
+
+    def confirm_patch(diff: str, patches: dict) -> bool:
+        console.print("\n[bold yellow]Proposed AI-Generated Patch Diff:[/bold yellow]")
+        console.print(diff)
+        return typer.confirm("Apply this patch to disk?", default=False)
+
+    report = run_healing_loop(
+        root,
+        ctx,
+        max_retries=retries,
+        preview=preview,
+        preview_callback=confirm_patch if (not yes and not preview and sys.stdin.isatty()) else None,
+    )
+
+    if preview and report.patch_diff:
+        console.print("\n[bold yellow]Proposed Healing Diff Preview (Dry-Run):[/bold yellow]")
+        console.print(report.patch_diff)
+        console.print("[dim]Run without --preview to apply fixes.[/dim]")
+        return
 
     if report.success:
         console.print(f"\n[bold green]✓ {report.human_review_summary}[/bold green]")
@@ -1039,6 +1118,68 @@ def heal_cmd(
         console.print(f"\n[bold red]✗ Self-Healing Incomplete:[/bold red] {report.root_cause}")
         console.print(f"[yellow]Attempted {report.attempt_count} revision(s). Manual intervention required.[/yellow]")
         raise typer.Exit(1)
+
+
+# ── Explain Command ─────────────────────────────────────────────────────────
+@app.command("explain")
+def explain_cmd(
+    output_file: Optional[Path] = typer.Option(None, "--output-file", "-o", help="Optional markdown file to write narrative to"),
+):
+    """Generates an executive, human-readable narrative of the project lifecycle and sign-offs."""
+    root = find_project_root()
+    state = load_state(root)
+    from valdoz.phases import PHASE_NAMES
+    from valdoz.repair import parse_approvals_log
+    from valdoz.slices import list_slices
+
+    approvals = parse_approvals_log(root)
+    slices = list_slices(root)
+
+    lines = [
+        f"# Executive Narrative: {state.project_name}",
+        f"**Current Status:** Phase {state.current_phase} ({PHASE_NAMES.get(state.current_phase, '')})",
+        f"**Primary Language/Stack:** {state.chosen_stack.get('language', 'General')} | Packs: {', '.join(state.packs)}",
+        "\n## Phase Progression & Governance History\n",
+    ]
+
+    for p_num in sorted(PHASE_NAMES.keys()):
+        p_name = PHASE_NAMES[p_num]
+        p_state = state.phases.get(str(p_num))
+        status = p_state.status if p_state else "pending"
+
+        if status == "approved":
+            app_info = approvals.get(p_num, {})
+            approver = app_info.get("approver") or p_state.approved_by or "Human Lead"
+            ts = app_info.get("timestamp") or p_state.approved_at or "Unknown"
+            comp_hash = (app_info.get("hash") or p_state.approval_hash or "")[:12]
+            lines.append(f"### [✓] Phase {p_num}: {p_name}")
+            lines.append(f"- **Status:** Approved by `{approver}` at `{ts}`")
+            if comp_hash:
+                lines.append(f"- **Composite Audit Hash:** `{comp_hash}...`")
+            delivs = list(p_state.deliverable_hashes.keys()) if p_state else []
+            if delivs:
+                lines.append(f"- **Frozen Deliverables ({len(delivs)}):** {', '.join(delivs)}")
+        elif status == "in_progress":
+            lines.append(f"### [●] Phase {p_num}: {p_name} (ACTIVE)")
+            lines.append("- **Status:** Currently in progress.")
+        else:
+            lines.append(f"### [ ] Phase {p_num}: {p_name}")
+            lines.append("- **Status:** Pending.")
+        lines.append("")
+
+    if slices:
+        lines.append("## Phase 6 TDD Slices\n")
+        for s in slices:
+            lines.append(f"- **Slice `{s.slice_id}`**: Status: `{s.status}`, Tests: `{'Passed' if s.tests_passed else 'Pending'}`")
+
+    narrative = "\n".join(lines)
+
+    if output_file:
+        output_file.write_text(narrative, encoding="utf-8")
+        console.print(f"[bold green]Executive narrative exported to:[/bold green] [cyan]{output_file}[/cyan]")
+    else:
+        from rich.markdown import Markdown
+        console.print(Markdown(narrative))
 
 
 # ── Doctor Command ──────────────────────────────────────────────────────────

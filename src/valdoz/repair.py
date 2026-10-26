@@ -49,9 +49,9 @@ def parse_approvals_log(project_root: Path) -> Dict[int, Dict[str, str]]:
     if not log_path.exists():
         return approvals
 
-    # Example: [2026-10-22T10:36:20.123456+00:00] Phase 1 (Intake) approved by alice at 2026-10-22T10:36:20... Composite hash: abc... Deliverables hashed: 1.
+    # Example: [2026-10-22T10:36:20.123456+00:00] [CHAIN:...] Phase 1 (Intake) approved by alice at 2026-10-22T10:36:20... Composite hash: abc... Deliverables hashed: 1.
     pattern = re.compile(
-        r"\[(?P<ts>[^\]]+)\] Phase (?P<phase>\d+).*?approved by (?P<user>\S+) at (?P<app_ts>\S+)\. Composite hash: (?P<hash>[a-f0-9]+)\.\.\."
+        r"\[(?P<ts>[^\]]+)\].*?Phase (?P<phase>\d+).*?approved by (?P<user>\S+) at (?P<app_ts>\S+)\. Composite hash: (?P<hash>[a-f0-9]+)"
     )
 
     for line in log_path.read_text(encoding="utf-8").splitlines():
@@ -133,14 +133,13 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
             highest_phase_seen = max(highest_phase_seen, p_num)
             messages.append(f"Restored approved Phase {p_num} ({PHASE_NAMES[p_num]}) from approvals log.")
         elif all_exist and len(req_deliverables) > 0:
-            p_state.status = "gated"
             p_state.deliverable_hashes = deliverable_hashes
             highest_phase_seen = max(highest_phase_seen, p_num)
-            messages.append(f"Detected complete deliverables for Phase {p_num} ({PHASE_NAMES[p_num]}); marked 'gated'.")
+            messages.append(f"Detected complete deliverables for unapproved Phase {p_num} ({PHASE_NAMES[p_num]}).")
         elif any_exist:
-            p_state.status = "in_progress"
+            p_state.deliverable_hashes = deliverable_hashes
             highest_phase_seen = max(highest_phase_seen, p_num)
-            messages.append(f"Detected partial deliverables for Phase {p_num} ({PHASE_NAMES[p_num]}); marked 'in_progress'.")
+            messages.append(f"Detected partial deliverables for unapproved Phase {p_num} ({PHASE_NAMES[p_num]}).")
 
     # Determine current phase: first unapproved phase, or highest + 1
     current_phase = 0
@@ -151,7 +150,13 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
     else:
         current_phase = max(PHASE_NAMES.keys())
 
-    phases[str(current_phase)].status = "in_progress"
+    for p_num in sorted(PHASE_NAMES.keys()):
+        p_str = str(p_num)
+        if phases[p_str].status != "approved":
+            if p_num == current_phase:
+                phases[p_str].status = "in_progress"
+            else:
+                phases[p_str].status = "pending"
 
     state = ValdozState(
         project_name=proj_name,

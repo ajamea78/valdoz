@@ -6,6 +6,7 @@ Antigravity's approved Tailwind design system and CSS custom properties.
 
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 from typing import Optional
@@ -90,11 +91,11 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
           <span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">LIVE ENGINE</span>
           <span class="text-xs text-[var(--muted-foreground)]">v3.0.0</span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mt-1">Project: <span class="font-mono text-white">{state.project_name}</span> &bull; Client Lang: <span class="uppercase font-mono">{state.language}</span></p>
+        <p class="text-xs text-[var(--muted-foreground)] mt-1">Project: <span class="font-mono text-white">{html.escape(state.project_name)}</span> &bull; Client Lang: <span class="uppercase font-mono">{html.escape(state.language)}</span></p>
       </div>
       <div class="text-right">
         <span class="text-xs text-[var(--muted-foreground)]">Current Focus</span>
-        <div class="text-lg font-bold text-white">Phase {curr_phase}: {PHASE_NAMES.get(curr_phase, 'Unknown')}</div>
+        <div class="text-lg font-bold text-white">Phase {curr_phase}: {html.escape(PHASE_NAMES.get(curr_phase, 'Unknown'))}</div>
       </div>
     </div>
 
@@ -114,7 +115,7 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
               else 'WAITING'
           }</span>
         </div>
-        <div class="font-semibold truncate text-white">{p['name']}</div>
+        <div class="font-semibold truncate text-white">{html.escape(p['name'])}</div>
       </div>
       ''' for p in phase_data)}
     </div>
@@ -131,7 +132,7 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
         <div class="py-2.5 flex items-center justify-between text-xs">
           <div class="flex items-center gap-2">
             <span class="font-mono text-sm">{ "✓" if d["exists"] else "✗" }</span>
-            <span class="font-mono { "text-white" if d["exists"] else "text-[var(--muted-foreground)]" }">{d["path"]}</span>
+            <span class="font-mono { "text-white" if d["exists"] else "text-[var(--muted-foreground)]" }">{html.escape(d["path"])}</span>
           </div>
           <span class="px-2 py-0.5 rounded text-[11px] {
               "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" if d["exists"]
@@ -150,8 +151,8 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
         {"".join(f"""
         <div class="p-3 rounded-lg border border-[var(--border)] bg-zinc-900/40 text-xs space-y-1">
           <div class="flex items-center justify-between font-mono">
-            <span class="font-bold text-white">{s["id"]}</span>
-            <span class="uppercase text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">{s["status"]}</span>
+            <span class="font-bold text-white">{html.escape(s["id"])}</span>
+            <span class="uppercase text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">{html.escape(s["status"])}</span>
           </div>
           <div class="text-[11px] text-[var(--muted-foreground)]">Tests: {'✓ Passing' if s['tests_passed'] else '✗ Not Run'}</div>
         </div>

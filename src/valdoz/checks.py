@@ -51,7 +51,12 @@ PYTHON_BUILTIN_MODULES = {
     "os", "sys", "re", "json", "pathlib", "datetime", "typing", "collections",
     "functools", "itertools", "hashlib", "subprocess", "math", "time", "random",
     "urllib", "stat", "shutil", "signal", "getpass", "unittest", "logging",
-    "html", "copy", "tempfile", "io", "string", "abc", "contextlib", "pydantic",
+    "html", "copy", "tempfile", "io", "string", "abc", "contextlib", "difflib",
+}
+
+PACKAGE_IMPORT_ALIASES = {
+    "pyyaml": "yaml",
+    "pillow": "pil",
 }
 
 
@@ -258,15 +263,44 @@ def scan_undeclared_imports(project_root: Path) -> AuditCheckResult:
 
     declared: Set[str] = set()
 
-    # Read declared Python dependencies
+    # Read declared Python dependencies using tomllib
     if pyproject.exists():
-        text = pyproject.read_text(encoding="utf-8", errors="ignore")
-        for line in text.splitlines():
-            # match "package>=1.0" or 'package'
-            m = re.match(r'^\s*["\']([a-zA-Z0-9_-]+)', line)
-            if m:
-                pkg = m.group(1).replace("-", "_").lower()
-                declared.add(pkg)
+        try:
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib  # type: ignore
+
+            with open(pyproject, "rb") as f:
+                toml_data = tomllib.load(f)
+
+            raw_deps: List[str] = []
+            proj = toml_data.get("project", {})
+            raw_deps.extend(proj.get("dependencies", []))
+            for opt_list in proj.get("optional-dependencies", {}).values():
+                if isinstance(opt_list, list):
+                    raw_deps.extend(opt_list)
+
+            poetry_deps = toml_data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+            if isinstance(poetry_deps, dict):
+                raw_deps.extend(poetry_deps.keys())
+
+            for dep in raw_deps:
+                clean_name = re.split(r"[><=~!;\[ ]", dep)[0].strip()
+                if clean_name:
+                    norm = clean_name.replace("-", "_").lower()
+                    declared.add(norm)
+                    if norm in PACKAGE_IMPORT_ALIASES:
+                        declared.add(PACKAGE_IMPORT_ALIASES[norm])
+        except Exception:
+            text = pyproject.read_text(encoding="utf-8", errors="ignore")
+            for line in text.splitlines():
+                m = re.match(r'^\s*["\']([a-zA-Z0-9_-]+)', line)
+                if m:
+                    pkg = m.group(1).replace("-", "_").lower()
+                    declared.add(pkg)
+                    if pkg in PACKAGE_IMPORT_ALIASES:
+                        declared.add(PACKAGE_IMPORT_ALIASES[pkg])
 
     # Read declared Node dependencies
     if package_json.exists():
@@ -288,12 +322,15 @@ def scan_undeclared_imports(project_root: Path) -> AuditCheckResult:
             continue
         all_imports.update(extract_python_imports(p))
 
+    local_pkgs = {p.stem.lower() for p in (project_root / "src").glob("*")} if (project_root / "src").exists() else set()
+    local_pkgs.add(project_root.name.lower())
+
     # Identify external imports not declared and not builtin
     undeclared = []
     for imp in sorted(all_imports):
         imp_norm = imp.lower()
-        if imp_norm not in PYTHON_BUILTIN_MODULES and imp_norm != project_root.name.lower():
-            if not any(imp_norm.startswith(d) for d in declared):
+        if imp_norm not in PYTHON_BUILTIN_MODULES and imp_norm not in local_pkgs:
+            if not any(imp_norm.startswith(d) or d.startswith(imp_norm) for d in declared):
                 undeclared.append(imp)
 
     passed = len(undeclared) == 0

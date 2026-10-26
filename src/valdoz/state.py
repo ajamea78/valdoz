@@ -19,10 +19,12 @@ from pydantic import BaseModel, Field
 class PhaseState(BaseModel):
     name: str
     status: str = "pending"  # pending, in_progress, gated, approved, pending_reapproval
+    entered_at: Optional[str] = None
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None
     approval_hash: Optional[str] = None
     deliverable_hashes: Dict[str, str] = Field(default_factory=dict)
+    approvals: List[Dict[str, str]] = Field(default_factory=list)
 
 
 PHASE_NAMES: Dict[int, str] = {
@@ -42,9 +44,11 @@ PHASE_NAMES: Dict[int, str] = {
 
 def default_phases() -> Dict[str, PhaseState]:
     phases = {}
+    now_iso = datetime.now(timezone.utc).isoformat()
     for num, name in PHASE_NAMES.items():
         initial_status = "in_progress" if num == 0 else "pending"
-        phases[str(num)] = PhaseState(name=name, status=initial_status)
+        entered = now_iso if num == 0 else None
+        phases[str(num)] = PhaseState(name=name, status=initial_status, entered_at=entered)
     return phases
 
 
@@ -160,7 +164,12 @@ def save_state(project_root: Path, state: ValdozState, write_protect: bool = Fal
 
 
 def verify_phase_integrity(project_root: Path, phase_num: int) -> Tuple[bool, List[str]]:
-    """Verifies that deliverables of an approved phase have not been tampered with.
+    """Verifies that deliverables and approvals of an approved phase have not been tampered with.
+
+    Checks:
+      1. Approvals log hash-chain integrity.
+      2. Cross-verifies phase approval record against approvals.log.
+      3. Verifies SHA-256 hashes of all approved deliverables on disk.
 
     Returns:
         (is_valid, list_of_violations)
@@ -175,12 +184,47 @@ def verify_phase_integrity(project_root: Path, phase_num: int) -> Tuple[bool, Li
         return True, []  # Unapproved phases have no frozen deliverables to verify
 
     violations: List[str] = []
-    if not phase.deliverable_hashes:
-        return True, []
+
+    # 1. Audit log integrity check
+    from valdoz.phases import get_required_deliverables, verify_audit_log_integrity
+    log_ok, log_violations = verify_audit_log_integrity(project_root)
+    if not log_ok:
+        violations.extend(log_violations)
+
+    # 2. Cross-verify approval against approvals.log
+    log_path = project_root / ".valdoz" / "approvals.log"
+    if log_path.exists():
+        from valdoz.repair import parse_approvals_log
+        log_approvals = parse_approvals_log(project_root)
+        if phase_num not in log_approvals:
+            violations.append(
+                f"Tampering detected in state.json: Phase {phase_num} marked 'approved' but no record exists in approvals.log."
+            )
+        else:
+            logged = log_approvals[phase_num]
+            if phase.approval_hash and logged.get("hash") and not phase.approval_hash.startswith(logged["hash"]):
+                violations.append(
+                    f"Tampering detected in state.json: Phase {phase_num} approval hash '{phase.approval_hash[:12]}...' does not match approvals.log '{logged['hash'][:12]}...'."
+                )
+
+    # 3. Check deliverable existence and hashes
+    required_deliverables = get_required_deliverables(phase_num)
+    if required_deliverables and not phase.deliverable_hashes:
+        violations.append(f"Approved Phase {phase_num} has no deliverable hashes recorded in state.json.")
 
     for rel_path, expected_hash in phase.deliverable_hashes.items():
         if rel_path == ".valdoz/state.json":
+            # Verify Phase 0 state.json exists and parses cleanly
+            state_file = project_root / rel_path
+            if not state_file.exists():
+                violations.append("State file .valdoz/state.json is missing.")
+            else:
+                try:
+                    json.loads(state_file.read_text(encoding="utf-8"))
+                except Exception as e:
+                    violations.append(f"State file .valdoz/state.json corrupted: {e}")
             continue
+
         file_path = project_root / rel_path
         if not file_path.exists():
             violations.append(f"Approved deliverable missing: '{rel_path}'")

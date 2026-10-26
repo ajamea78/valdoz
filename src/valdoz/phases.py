@@ -6,6 +6,8 @@ side-effect classifications, and phase reopening cascades.
 
 from __future__ import annotations
 
+import hashlib
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -95,12 +97,80 @@ def get_side_effect_info(phase_num: int) -> SideEffectInfo:
     )
 
 
-def append_approvals_log(project_root: Path, message: str) -> None:
+GENESIS_HASH = "0" * 64
+
+
+def get_last_audit_entry(project_root: Path) -> Tuple[str, Optional[str]]:
+    """Returns (prev_hash, last_line_raw) from .valdoz/approvals.log."""
+    import hashlib
+    log_path = project_root / ".valdoz" / "approvals.log"
+    if not log_path.exists():
+        return GENESIS_HASH, None
+    lines = [line.strip() for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        return GENESIS_HASH, None
+    last_line = lines[-1]
+    match = re.search(r"\[CHAIN:([a-f0-9]{64})\]", last_line)
+    if match:
+        return match.group(1), last_line
+    return hashlib.sha256(last_line.encode("utf-8")).hexdigest(), last_line
+
+
+def append_approvals_log(project_root: Path, message: str) -> str:
+    """Appends an entry to the cryptographic hash-chained append-only audit trail."""
+    import hashlib
     log_path = project_root / ".valdoz" / "approvals.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).isoformat()
+    prev_hash, _ = get_last_audit_entry(project_root)
+    payload = f"{prev_hash}|{ts}|{message}"
+    entry_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    entry_line = f"[{ts}] [CHAIN:{entry_hash}] [PREV:{prev_hash}] {message}\n"
     with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"[{ts}] {message}\n")
+        f.write(entry_line)
+    return entry_hash
+
+
+def verify_audit_log_integrity(project_root: Path) -> Tuple[bool, List[str]]:
+    """Cryptographically verifies the hash-chained approvals.log ledger."""
+    import hashlib
+    log_path = project_root / ".valdoz" / "approvals.log"
+    if not log_path.exists():
+        return True, []
+    lines = [line.strip() for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        return True, []
+
+    violations: List[str] = []
+    expected_prev: Optional[str] = None
+
+    for idx, line in enumerate(lines, 1):
+        chain_match = re.search(
+            r"^\[(?P<ts>[^\]]+)\]\s+\[CHAIN:(?P<chain>[a-f0-9]{64})\]\s+\[PREV:(?P<prev>[a-f0-9]{64})\]\s+(?P<msg>.+)$",
+            line,
+        )
+        if not chain_match:
+            expected_prev = hashlib.sha256(line.encode("utf-8")).hexdigest()
+            continue
+
+        ts = chain_match.group("ts")
+        chain_hash = chain_match.group("chain")
+        prev_hash = chain_match.group("prev")
+        msg = chain_match.group("msg")
+
+        if expected_prev is None:
+            if prev_hash != GENESIS_HASH and len(prev_hash) != 64:
+                violations.append(f"Line {idx}: Invalid genesis prev hash '{prev_hash}'")
+        elif prev_hash != expected_prev:
+            violations.append(f"Line {idx}: Hash chain link broken. Expected prev '{expected_prev[:12]}...', got '{prev_hash[:12]}...'")
+
+        recalculated = hashlib.sha256(f"{prev_hash}|{ts}|{msg}".encode("utf-8")).hexdigest()
+        if recalculated != chain_hash:
+            violations.append(f"Line {idx}: Entry payload tampering detected. Recalculated '{recalculated[:12]}...' != recorded '{chain_hash[:12]}...'")
+
+        expected_prev = chain_hash
+
+    return len(violations) == 0, violations
 
 
 def create_deliverable_stubs(project_root: Path, phase_num: int) -> None:
@@ -139,6 +209,7 @@ def advance_phase(project_root: Path) -> int:
     next_phase_key = str(next_num)
     state.current_phase = next_num
     state.phases[next_phase_key].status = "in_progress"
+    state.phases[next_phase_key].entered_at = datetime.now(timezone.utc).isoformat()
 
     create_deliverable_stubs(project_root, next_num)
     save_state(project_root, state)
@@ -146,6 +217,19 @@ def advance_phase(project_root: Path) -> int:
         project_root,
         f"Advanced from Phase {state.current_phase - 1} to Phase {next_num} ({PHASE_NAMES[next_num]}).",
     )
+    try:
+        from valdoz.webhooks import emit_webhook_event
+        emit_webhook_event(
+            project_root,
+            "phase.advanced",
+            {
+                "from_phase": state.current_phase - 1,
+                "to_phase": next_num,
+                "to_phase_name": PHASE_NAMES.get(next_num, ""),
+            },
+        )
+    except Exception:
+        pass
     return next_num
 
 
@@ -178,6 +262,7 @@ def reopen_phase(
     target_key = str(target_phase)
     target_state = state.phases[target_key]
     target_state.status = "in_progress"
+    target_state.entered_at = datetime.now(timezone.utc).isoformat()
     target_state.approval_hash = None
     target_state.approved_by = None
     target_state.approved_at = None
