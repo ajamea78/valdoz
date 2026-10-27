@@ -882,12 +882,20 @@ def audit_cmd(
     no_network: bool = typer.Option(True, "--no-network", help="Disable checks requiring external network"),
     fix: bool = typer.Option(False, "--fix", help="Automatically remediate safe audit failures (e.g. add .env to .gitignore, generate lockfile)"),
     semgrep: bool = typer.Option(False, "--semgrep", help="Run Semgrep deterministic AST vulnerability analysis"),
+    verify_packages: bool = typer.Option(False, "--verify-packages", help="Query PyPI/npm live registries to detect AI-hallucinated and slopsquatted dependencies"),
 ):
-    """Runs universal automated checks (secrets, lockfiles, undeclared imports, semgrep SAST)."""
+    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
-    report = run_valdoz_audit(root, strict=strict, no_network=no_network, fix=fix, semgrep=semgrep)
+    report = run_valdoz_audit(
+        root,
+        strict=strict,
+        no_network=no_network,
+        fix=fix,
+        semgrep=semgrep,
+        verify_packages=verify_packages,
+    )
 
     if report.fixes_applied:
         console.print("[bold green]✓ Automatically applied audit fixes:[/bold green]")

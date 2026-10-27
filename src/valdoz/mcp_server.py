@@ -57,6 +57,11 @@ VALDOZ_TOOLS = [
                     "description": "Run Semgrep deterministic AST Static Application Security Testing (SAST).",
                     "default": False,
                 },
+                "verify_packages": {
+                    "type": "boolean",
+                    "description": "Query PyPI/npm live registries to detect AI-hallucinated and slopsquatted dependencies.",
+                    "default": False,
+                },
             },
         },
     },
@@ -214,8 +219,20 @@ def handle_get_status(root: Path) -> Dict[str, Any]:
     }
 
 
-def handle_run_audit(root: Path, fix: bool = False, strict: bool = False, semgrep: bool = False) -> Dict[str, Any]:
-    report = run_valdoz_audit(root, fix=fix, strict=strict, semgrep=semgrep)
+def handle_run_audit(
+    root: Path,
+    fix: bool = False,
+    strict: bool = False,
+    semgrep: bool = False,
+    verify_packages: bool = False,
+) -> Dict[str, Any]:
+    report = run_valdoz_audit(
+        root,
+        fix=fix,
+        strict=strict,
+        semgrep=semgrep,
+        verify_packages=verify_packages,
+    )
     blocking_cnt = sum(1 for c in report.checks if c.severity == "blocking" and not c.passed)
     warning_cnt = sum(1 for c in report.checks if c.severity == "warning" and not c.passed)
     return {
@@ -402,6 +419,7 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             fix=arguments.get("fix", False),
             strict=arguments.get("strict", False),
             semgrep=arguments.get("semgrep", False),
+            verify_packages=arguments.get("verify_packages", False),
         )
     elif tool_name == "valdoz_check_gates":
         return handle_check_gates(root, phase_num=arguments.get("phase_num"))

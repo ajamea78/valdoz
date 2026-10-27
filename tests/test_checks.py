@@ -7,6 +7,7 @@ from valdoz.checks import (
     scan_lockfile,
     scan_undeclared_imports,
     scan_semgrep,
+    scan_package_hallucination,
     run_valdoz_audit,
 )
 from valdoz.state import ValdozState, save_state
@@ -200,5 +201,104 @@ def test_run_valdoz_audit_with_semgrep_flag(temp_project: Path, monkeypatch):
 
     report = run_valdoz_audit(temp_project, semgrep=True)
     assert any(c.id == "semgrep-sast" for c in report.checks)
+
+
+def test_package_hallucination_no_manifests(temp_project: Path):
+    res = scan_package_hallucination(temp_project)
+    assert res.status == "skipped"
+    assert res.passed is True
+    assert "No external dependency declarations" in res.message
+
+
+def test_package_hallucination_offline_clean(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic>=2.0.0",
+    "fastapi",
+    "rich",
+]
+""")
+    res = scan_package_hallucination(temp_project, verify_registry=False)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "Verified 3 dependencies against offline slopsquatting heuristics" in res.message
+
+
+def test_package_hallucination_offline_typosquatting(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+    "reqeusts>=2.0.0",
+]
+""")
+    res = scan_package_hallucination(temp_project, verify_registry=False)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "Potential typosquatting/slopsquatting detected" in res.message
+    assert "reqeusts" in res.message
+    assert "requests" in res.message
+
+
+def test_package_hallucination_registry_verification(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+    "non-existent-hallucinated-package-xyz",
+]
+""")
+    from valdoz import checks
+
+    def mock_verify(pkg_name: str, ecosystem: str = "pypi", timeout: float = 3.5):
+        if pkg_name == "pydantic":
+            return True, "Found"
+        return False, "Not found (404)"
+
+    monkeypatch.setattr(checks, "verify_registry_package_existence", mock_verify)
+
+    res = scan_package_hallucination(temp_project, verify_registry=True)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "AI-hallucinated package(s) detected" in res.message
+    assert "non-existent-hallucinated-package-xyz (PYPI)" in res.message
+
+
+def test_package_hallucination_registry_all_clean(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+    "fastapi",
+]
+""")
+    from valdoz import checks
+
+    monkeypatch.setattr(checks, "verify_registry_package_existence", lambda pkg, eco=None, timeout=None: (True, "Found"))
+
+    res = scan_package_hallucination(temp_project, verify_registry=True)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "All 2 dependencies verified genuine and registered" in res.message
+
+
+def test_run_valdoz_audit_with_verify_packages_flag(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+]
+""")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    from valdoz import checks
+    monkeypatch.setattr(checks, "verify_registry_package_existence", lambda pkg, eco=None, timeout=None: (True, "Found"))
+
+    report = run_valdoz_audit(temp_project, verify_packages=True)
+    assert any(c.id == "package-hallucination" for c in report.checks)
+    pkg_chk = next(c for c in report.checks if c.id == "package-hallucination")
+    assert pkg_chk.passed is True
+
 
 

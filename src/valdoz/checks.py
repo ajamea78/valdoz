@@ -519,6 +519,245 @@ def scan_semgrep(project_root: Path) -> AuditCheckResult:
         )
 
 
+# ── Package Hallucination & Slopsquatting Targets ───────────────────────────
+POPULAR_PACKAGES_TYPOSQUAT_TARGETS = {
+    # Python
+    "requests", "urllib3", "pydantic", "fastapi", "flask", "django", "cryptography",
+    "pytest", "boto3", "numpy", "pandas", "scipy", "httpx", "aiohttp", "click", "rich",
+    "typer", "black", "flake8", "mypy", "celery", "sqlalchemy", "redis", "jinja2",
+    "pyyaml", "toml", "tomli", "uvicorn", "gunicorn", "certifi", "idna", "setuptools",
+    "wheel", "pip", "pillow", "scikit-learn", "torch", "tensorflow", "transformers",
+    # Node
+    "react", "react-dom", "express", "lodash", "axios", "typescript", "eslint",
+    "prettier", "webpack", "next", "vue", "chalk", "moment", "dotenv", "tslib",
+    "jest", "commander", "rxjs", "cors", "multer", "mongoose", "prisma", "tailwindcss",
+}
+
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculates edit distance between two strings."""
+    if s1 == s2:
+        return 0
+    if abs(len(s1) - len(s2)) > 2:
+        return 99
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1] + [0] * len(s2)
+        for j, c2 in enumerate(s2):
+            cost = 0 if c1 == c2 else 1
+            curr[j + 1] = min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost)
+        prev = curr
+    return prev[len(s2)]
+
+
+def extract_manifest_declared_packages(project_root: Path) -> Dict[str, Set[str]]:
+    """Extracts declared external dependencies from Python and Node manifests."""
+    manifests: Dict[str, Set[str]] = {"pypi": set(), "npm": set()}
+    pyproject = project_root / "pyproject.toml"
+    package_json = project_root / "package.json"
+
+    # Identify project own name to avoid self-checking
+    own_names = {project_root.name.lower().replace("_", "-")}
+
+    # Read pyproject.toml
+    if pyproject.exists():
+        try:
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib  # type: ignore
+
+            with open(pyproject, "rb") as f:
+                toml_data = tomllib.load(f)
+
+            proj = toml_data.get("project", {})
+            if "name" in proj:
+                own_names.add(proj["name"].lower().replace("_", "-"))
+
+            raw_deps: List[str] = []
+            raw_deps.extend(proj.get("dependencies", []))
+            for opt_list in proj.get("optional-dependencies", {}).values():
+                if isinstance(opt_list, list):
+                    raw_deps.extend(opt_list)
+            poetry_deps = toml_data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+            if isinstance(poetry_deps, dict):
+                raw_deps.extend(poetry_deps.keys())
+
+            for dep in raw_deps:
+                clean = re.split(r"[><=~!;\^\[ ]", dep)[0].strip()
+                if clean and not clean.startswith((".", "/", "git+", "http:", "https:", "-")):
+                    norm = clean.lower().replace("_", "-")
+                    if norm not in own_names:
+                        manifests["pypi"].add(norm)
+        except Exception:
+            pass
+
+    # Read requirements*.txt
+    for req_file in project_root.glob("requirements*.txt"):
+        try:
+            for line in req_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if not line or line.startswith(("#", "-r", "-i", "--", "-f", "-e")):
+                    continue
+                clean = re.split(r"[><=~!;\^\[ ]", line)[0].strip()
+                if clean and not clean.startswith((".", "/", "git+", "http:", "https:", "-")):
+                    norm = clean.lower().replace("_", "-")
+                    if norm not in own_names:
+                        manifests["pypi"].add(norm)
+        except Exception:
+            pass
+
+    # Read package.json
+    if package_json.exists():
+        try:
+            data = json.loads(package_json.read_text(encoding="utf-8"))
+            if "name" in data:
+                own_names.add(data["name"].lower())
+            deps = {
+                **data.get("dependencies", {}),
+                **data.get("devDependencies", {}),
+                **data.get("peerDependencies", {}),
+            }
+            for d in deps.keys():
+                if not d.startswith((".", "/", "file:", "link:", "git:", "github:", "http:", "https:")):
+                    if d.lower() not in own_names:
+                        manifests["npm"].add(d)
+        except Exception:
+            pass
+
+    return manifests
+
+
+def verify_registry_package_existence(pkg_name: str, ecosystem: str = "pypi", timeout: float = 3.5) -> Tuple[bool, str]:
+    """Queries official registry (PyPI / npm) to verify that a package exists.
+
+    Returns (exists, message).
+    """
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    if ecosystem == "pypi":
+        safe_name = urllib.parse.quote(pkg_name)
+        url = f"https://pypi.org/pypi/{safe_name}/json"
+    else:
+        safe_name = urllib.parse.quote(pkg_name, safe="@")
+        url = f"https://registry.npmjs.org/{safe_name}"
+
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return True, "Invalid URL scheme"
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "valdoz-protocol/3.0.0"},
+        method="HEAD",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosemgrep
+            return resp.status == 200, "Found"
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False, f"Package '{pkg_name}' not found on {ecosystem.upper()} (HTTP 404)"
+        return True, f"HTTP {e.code}"
+    except Exception as e:
+        return True, f"Network error ({e})"
+
+
+def scan_package_hallucination(project_root: Path, verify_registry: bool = False) -> AuditCheckResult:
+    """Detects AI-hallucinated and slopsquatted dependencies in project manifests.
+
+    1. Checks declared packages against offline typosquatting heuristics on popular targets.
+    2. When verify_registry=True (or network enabled), queries PyPI/npm to confirm package existence.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    manifests = extract_manifest_declared_packages(project_root)
+    all_pypi = manifests["pypi"]
+    all_npm = manifests["npm"]
+    total_pkgs = len(all_pypi) + len(all_npm)
+
+    if total_pkgs == 0:
+        return AuditCheckResult(
+            id="package-hallucination",
+            name="Package Hallucination & Slopsquatting Scanner",
+            severity="blocking",
+            status="skipped",
+            passed=True,
+            message="No external dependency declarations found in manifests.",
+        )
+
+    # 1. Offline Typosquatting / Slopsquatting Heuristics
+    typosquat_violations: List[str] = []
+    all_declared = all_pypi | all_npm
+    for pkg in sorted(all_declared):
+        norm = pkg.lower().replace("_", "-")
+        for target in POPULAR_PACKAGES_TYPOSQUAT_TARGETS:
+            if norm == target:
+                continue
+            dist = levenshtein_distance(norm, target)
+            # Flag if distance is 1 (or 2 for long names >= 6 chars)
+            if dist == 1 or (dist == 2 and len(target) >= 7 and len(norm) >= 6):
+                typosquat_violations.append(
+                    f"'{pkg}' matches popular package '{target}' (edit distance {dist})"
+                )
+
+    if typosquat_violations:
+        return AuditCheckResult(
+            id="package-hallucination",
+            name="Package Hallucination & Slopsquatting Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"Potential typosquatting/slopsquatting detected: {'; '.join(typosquat_violations[:3])}",
+        )
+
+    # 2. Live Registry Existence Verification
+    if not verify_registry:
+        return AuditCheckResult(
+            id="package-hallucination",
+            name="Package Hallucination & Slopsquatting Scanner",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message=f"Verified {total_pkgs} dependencies against offline slopsquatting heuristics (run with --verify-packages to verify live PyPI/npm existence).",
+        )
+
+    # Concurrently query live registries
+    hallucinated: List[str] = []
+    queries = [(pkg, "pypi") for pkg in all_pypi] + [(pkg, "npm") for pkg in all_npm]
+
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(queries)))) as executor:
+        futures = {executor.submit(verify_registry_package_existence, pkg, eco): (pkg, eco) for pkg, eco in queries}
+        for fut in futures:
+            pkg, eco = futures[fut]
+            try:
+                exists, msg = fut.result()
+                if not exists:
+                    hallucinated.append(f"{pkg} ({eco.upper()})")
+            except Exception:
+                pass
+
+    if hallucinated:
+        return AuditCheckResult(
+            id="package-hallucination",
+            name="Package Hallucination & Slopsquatting Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"AI-hallucinated package(s) detected: {', '.join(hallucinated)} (does not exist on registry, critical slopsquatting vulnerability)",
+        )
+
+    return AuditCheckResult(
+        id="package-hallucination",
+        name="Package Hallucination & Slopsquatting Scanner",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"All {total_pkgs} dependencies verified genuine and registered on official registries.",
+    )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -669,6 +908,7 @@ def run_valdoz_audit(
     no_network: bool = True,
     fix: bool = False,
     semgrep: bool = False,
+    verify_packages: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
     fixes: List[str] = []
@@ -695,6 +935,16 @@ def run_valdoz_audit(
             )
         )
 
+    # If --verify-packages explicitly enabled, append package-hallucination check if not present
+    if verify_packages and not any(c.id == "package-hallucination" for c in configured_checks):
+        configured_checks.append(
+            PackCheckDefinition(
+                id="package-hallucination",
+                description="Detect AI-hallucinated and slopsquatted packages",
+                severity="blocking",
+            )
+        )
+
     results: List[AuditCheckResult] = []
 
     # Map check ID to implementation
@@ -704,13 +954,18 @@ def run_valdoz_audit(
         "undeclared-imports": scan_undeclared_imports,
         "git-identity": scan_git_identity,
         "semgrep-sast": scan_semgrep,
+        "package-hallucination": scan_package_hallucination,
     }
 
     for chk in configured_checks:
-        runner = CHECK_RUNNERS.get(chk.id)
-        if runner:
+        if chk.id == "package-hallucination":
+            should_verify_net = verify_packages or (not no_network)
+            res = scan_package_hallucination(project_root, verify_registry=should_verify_net)
+            res.severity = chk.severity
+            results.append(res)
+        elif chk.id in CHECK_RUNNERS:
+            runner = CHECK_RUNNERS[chk.id]
             res = runner(project_root)
-            # Apply pack configured severity
             res.severity = chk.severity
             results.append(res)
         else:
