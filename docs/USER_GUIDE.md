@@ -442,6 +442,7 @@ ValdoZ automatically checks:
 - **Package Hallucination & Slopsquatting (`--verify-packages`)**: Protects against AI supply-chain attacks by detecting non-existent hallucinated package names and typosquatting/slopsquatting mutations before malicious packages can be installed.
 - **License Compliance & Copyleft Scanner (`--licenses`)**: Scans all declared dependencies for viral copyleft licenses (GPL, AGPL, SSPL) to prevent legal liability and unauthorized IP contamination in proprietary codebases.
 - **OpenAPI Contract & Schema Drift Scanner (`--contract`)**: Verifies OpenAPI specifications against implemented codebase routes (FastAPI, Flask, Express, NestJS) to detect undocumented shadow endpoints and unimplemented contract specs.
+- **Container & IaC Hardening Scanner (`--containers`)**: Audits Dockerfiles and Docker Compose manifests against Hadolint/CIS benchmarks, catching root user execution (CWE-250), floating image tags, insecure host mounts (`/var/run/docker.sock`), and privileged mode escalations.
 
 ### Running Advanced Security & Compliance Audits
 To trigger AST static security analysis with Semgrep during an audit:
@@ -459,6 +460,10 @@ valdoz audit --licenses
 To audit API contract drift against OpenAPI/Swagger specifications:
 ```bash
 valdoz audit --contract
+```
+To audit Dockerfile and Docker Compose security hardening:
+```bash
+valdoz audit --containers
 ```
 Or permanently enable the `security` or `api` pack so these audits run automatically on phase gate checks:
 ```bash
