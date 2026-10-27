@@ -99,20 +99,22 @@ if [ "$IS_PROD_PUSH" -eq 1 ]; then
 
     # Direct push to production branches is ONLY permitted in Phase 8 (Deploy) or Phase 10 (approved Change Requests)
     if [ "$CURRENT_PHASE" != "8" ] && [ "$CURRENT_PHASE" != "10" ]; then
-        echo ""
-        echo "🛑 [ValdoZ Push Protection Error]"
-        echo "Direct push to production-linked branch '$DEST_BRANCH' is BLOCKED."
-        echo "Current project is in Phase ${CURRENT_PHASE:-'unknown'}."
-        echo ""
-        echo "Pushing directly to '$DEST_BRANCH' triggers automatic Live/Production cloud deployments (Vercel, AWS, Fly, etc.)."
-        echo "Under ValdoZ Protocol, live deployments are strictly gated until Phase 8 (Deploy) after human sign-off."
-        echo ""
-        echo "Recommended Actions:"
-        echo "  1. Push to a feature or slice branch instead:  git push origin HEAD:refs/heads/slice/<name>"
-        echo "  2. Complete slice verification in Phase 6 / 7 before promoting to '$DEST_BRANCH'."
-        echo "  3. If you have explicit human authorization to override, run:  VALDOZ_ALLOW_PROD_PUSH=1 git push"
-        echo ""
-        if [ "$VALDOZ_ALLOW_PROD_PUSH" != "1" ]; then
+        if [ "$VALDOZ_ALLOW_PROD_PUSH" = "1" ]; then
+            echo "⚡ [ValdoZ Push Protection] Pushing to '$DEST_BRANCH' with human authorization override (VALDOZ_ALLOW_PROD_PUSH=1)."
+        else
+            echo ""
+            echo "🛑 [ValdoZ Push Protection Error]"
+            echo "Direct push to production-linked branch '$DEST_BRANCH' is BLOCKED."
+            echo "Current project is in Phase ${CURRENT_PHASE:-'unknown'}."
+            echo ""
+            echo "Pushing directly to '$DEST_BRANCH' triggers automatic Live/Production cloud deployments (Vercel, AWS, Fly, etc.)."
+            echo "Under ValdoZ Protocol, live deployments are strictly gated until Phase 8 (Deploy) after human sign-off."
+            echo ""
+            echo "Recommended Actions:"
+            echo "  1. Push to a feature or slice branch instead:  git push origin HEAD:refs/heads/slice/<name>"
+            echo "  2. Complete slice verification in Phase 6 / 7 before promoting to '$DEST_BRANCH'."
+            echo "  3. If you have explicit human authorization to override, run:  VALDOZ_ALLOW_PROD_PUSH=1 git push"
+            echo ""
             exit 1
         fi
     fi
