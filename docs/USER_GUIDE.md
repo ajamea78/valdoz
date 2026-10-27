@@ -1,4 +1,4 @@
-# The Complete ValdoZ Protocol v3.0 User Guide
+# The Complete ValdoZ Protocol v3.1.1 User Guide
 
 > **A practical, step-by-step handbook for human tech leads and Google Antigravity pair programming.**
 
@@ -553,14 +553,18 @@ This writes the tool configuration to `~/.gemini/config/mcp_config.json`. Antigr
 - `valdoz_approve_with_human_token`: Submits cryptographically verified human token to approve phases.
 - `valdoz_heal`: Triggers autonomous AI diagnosis and remediation for failed gates, audits, slices, or CI.
 
-### The In-Chat Human Approval Bridge
+### The In-Chat Human Approval Bridge & Deliverables Binding (`valdoz-v2`)
 Historically, gates required an interactive terminal (`sys.stdin.isatty()`) to prevent automated AI self-approval. 
 
-ValdoZ now features a **Human Non-Repudiation In-Chat Bridge**:
+ValdoZ v3.1.1 features an upgraded **Human Non-Repudiation In-Chat Bridge with Second-Order Security**:
 1. When Antigravity completes deliverables for a phase, it prompts you in the chat with a summary.
-2. An interactive confirmation modal (`ask_question` or user decision) prompts you to confirm approval.
-3. Upon your explicit selection, a secure cryptographic verification token is issued (`valdoz-v1.<action>.<target>.<timestamp>.<nonce>.<sig>`), signed with a 256-bit HMAC-SHA256 project secret and a 5-minute TTL, allowing the phase to be approved without leaving the conversation.
-4. **Security Guarantee Preserved**: The AI agent cannot fabricate this token on its own; it requires explicit human interaction and HMAC signature verification. All unauthenticated fallback tokens are rejected.
+2. An interactive confirmation modal prompts you to confirm approval.
+3. Upon your explicit selection, a secure cryptographic verification token is issued:
+   - **`valdoz-v2` Tokens**: `valdoz-v2.<action>.<target>.<deliverables_composite_hash>.<timestamp>.<nonce>.<sig>`
+   - The token embeds the composite SHA-256 hash of all deliverables on disk, eliminating Time-of-Check to Time-of-Use (TOCTOU) file modification races.
+4. **Out-of-Workspace Keystore**: Master signing secrets resolve from `VALDOZ_APPROVAL_SECRET` or the user's OS keystore at `~/.config/valdoz/keys/approval.key` (`0700` dir, `0600` file permissions), completely isolating keys from in-workspace agent execution.
+5. **Single-Use Nonce Burn**: Consumed tokens have their nonces recorded in `.valdoz/consumed_nonces.json` with 15-minute pruning, preventing token replay attacks within TTL windows.
+6. **Canonical JSON Audit Logging**: Approvals append to `.valdoz/approvals.log` using RFC 8785 canonical JSON formatting, establishing a verifiable hash chain anchored to Git tags (`valdoz anchor`).
 
 ### Live Generative UI Dashboard
 You can render a real-time, theme-aware visual dashboard directly in Antigravity chat:

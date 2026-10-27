@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ValdoZ Protocol v3.0 — The Autonomous Delivery Harness for Google Antigravity</title>
+  <title>ValdoZ Protocol v3.1.1 — The Autonomous Delivery Harness for Google Antigravity</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     :root {
@@ -48,17 +48,17 @@
         <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
           V
         </div>
-        <span class="font-bold text-lg tracking-tight">ValdoZ <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">v3.0</span></span>
+        <span class="font-bold text-lg tracking-tight">ValdoZ <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">v3.1.1</span></span>
       </div>
       <nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-300">
         <a href="#problems" class="hover:text-cyan-400 transition-colors">The 5 Fatal Traps</a>
-        <a href="#phases" class="hover:text-cyan-400 transition-colors">10-Phase Stepper</a>
+        <a href="#phases" class="hover:text-cyan-400 transition-colors">11-Phase Stepper</a>
         <a href="#terminal" class="hover:text-cyan-400 transition-colors">Live Simulator</a>
         <a href="#personas" class="hover:text-cyan-400 transition-colors">Who It's For</a>
         <a href="#comparison" class="hover:text-cyan-400 transition-colors">Comparison</a>
       </nav>
       <div class="flex items-center space-x-3">
-        <a href="https://github.com/akhalil/valdoz" target="_blank" class="text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition">
+        <a href="https://github.com/ajamea78/valdoz" target="_blank" class="text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition">
           GitHub
         </a>
         <a href="#quickstart" class="text-xs font-semibold px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 text-white hover:opacity-95 shadow-md shadow-cyan-500/10 transition">
@@ -88,8 +88,8 @@
 
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
         <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-3 font-mono text-xs sm:text-sm text-cyan-300 shadow-inner">
-          <span class="text-slate-500 mr-2">$</span> uv tool install valdoz-protocol@3.0.0
-          <button onclick="navigator.clipboard.writeText('uv tool install valdoz-protocol@3.0.0'); alert('Copied to clipboard!')" class="ml-3 text-slate-400 hover:text-white transition" title="Copy command">
+          <span class="text-slate-500 mr-2">$</span> uv tool install git+https://github.com/ajamea78/valdoz.git@v3.1.1
+          <button onclick="navigator.clipboard.writeText('uv tool install git+https://github.com/ajamea78/valdoz.git@v3.1.1'); alert('Copied to clipboard!')" class="ml-3 text-slate-400 hover:text-white transition" title="Copy command">
             📋
           </button>
         </div>
@@ -102,7 +102,7 @@
       <!-- Quick Metrics Ribbon -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/60">
         <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
-          <div class="text-2xl font-bold text-white">10 Phases</div>
+          <div class="text-2xl font-bold text-white">11 Phases</div>
           <div class="text-xs text-slate-400 mt-1">Deterministic Delivery</div>
         </div>
         <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
@@ -110,12 +110,12 @@
           <div class="text-xs text-slate-400 mt-1">Deliverable Write-Lock</div>
         </div>
         <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
-          <div class="text-2xl font-bold text-cyan-400">TTY Only</div>
-          <div class="text-xs text-slate-400 mt-1">Human-in-the-Loop Gate</div>
+          <div class="text-2xl font-bold text-cyan-400">valdoz-v2</div>
+          <div class="text-xs text-slate-400 mt-1">Deliverables-Bound HMAC</div>
         </div>
         <div class="p-4 rounded-xl bg-slate-900/40 border border-slate-800/40">
           <div class="text-2xl font-bold text-blue-400">0 regressions</div>
-          <div class="text-xs text-slate-400 mt-1">107 Automated Tests</div>
+          <div class="text-xs text-slate-400 mt-1">211 Automated Tests</div>
         </div>
       </div>
     </div>

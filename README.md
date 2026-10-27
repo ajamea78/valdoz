@@ -1,4 +1,4 @@
-# ValdoZ Protocol v3.1
+# ValdoZ Protocol v3.1.1
 
 > **Antigravity Delivery Discipline Engine**  
 > Turning autonomous AI coding assistants into disciplined, accountable delivery partners.
@@ -15,7 +15,8 @@
 
 - 📖 **[Complete User Guide](docs/USER_GUIDE.md)**: A practical, easy-to-read manual covering the operating loop, Builder & Scribe roles, Phase 6 slices, and cheat sheets.
 - 🛡️ **[Threat Model & Security Architecture](docs/THREAT_MODEL.md)**: Adversary model, cryptographic roots of trust, defense-in-depth matrix, and speed bump definitions.
-- 🔄 **[Migration Guide (v2.x to v3.1)](docs/MIGRATION.md)**: Upgrading existing ValdoZ repositories to v3.1.
+- 🔄 **[Migration Guide (v2.x to v3.1.1)](docs/MIGRATION.md)**: Upgrading existing ValdoZ repositories to v3.1.1.
+- 💼 **[Marketing & Pitch Playbook](docs/marketing/PITCH_AND_MARKETING.md)**: Strategic value proposition, agency delivery model, and technical differentiation.
 - 📋 **[Implementation Plan](docs/ValdoZ%20v3.0%20—%20Revised%20Implementation%20Plan.md)**: Full architecture and design decisions.
 
 ---
@@ -28,7 +29,7 @@
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Option A: Install tagged release directly from GitHub:
-uv tool install git+https://github.com/ajamea78/valdoz.git@v3.1.0
+uv tool install git+https://github.com/ajamea78/valdoz.git@v3.1.1
 
 # Option B: Install from local cloned source:
 uv tool install --editable . --force
