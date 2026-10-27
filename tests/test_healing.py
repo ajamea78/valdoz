@@ -107,6 +107,7 @@ def test_verify_after_patch_ci(tmp_path: Path):
     from valdoz.state import ValdozState, save_state
     state = ValdozState(project_name="ci-test", current_phase=0)
     save_state(tmp_path, state)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [0.1.0]\n- init\n")
 
     ctx = HealingContext(failure_type="ci", error_trace="CI failure")
     # State exists, Phase 0 has no deliverables required -> passes audit & gate

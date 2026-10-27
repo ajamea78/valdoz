@@ -1560,6 +1560,24 @@ def autofix_audit_issues(project_root: Path) -> List[str]:
             except Exception:
                 pass
 
+    # 4. Fix missing CHANGELOG.md
+    changelog_file = project_root / "CHANGELOG.md"
+    if not changelog_file.exists():
+        pyproject_path = project_root / "pyproject.toml"
+        ver = "0.1.0"
+        if pyproject_path.exists():
+            match = re.search(r'version\s*=\s*"([^"]+)"', pyproject_path.read_text(encoding="utf-8"))
+            if match:
+                ver = match.group(1)
+        changelog_content = (
+            "# Changelog\n\n"
+            "All notable changes to this project will be documented in this file.\n\n"
+            f"## [{ver}]\n"
+            "- Initial baseline and repository setup.\n"
+        )
+        changelog_file.write_text(changelog_content, encoding="utf-8")
+        actions_taken.append("Initialized baseline CHANGELOG.md.")
+
     return actions_taken
 
 
@@ -1574,6 +1592,60 @@ def scan_audit_anchor(project_root: Path) -> AuditCheckResult:
         status="ran",
         passed=ok,
         message=msg,
+    )
+
+
+def scan_doc_sync(project_root: Path) -> AuditCheckResult:
+    """Verifies that CHANGELOG.md exists and reflects the active project version."""
+    changelog_path = project_root / "CHANGELOG.md"
+    if not changelog_path.exists():
+        return AuditCheckResult(
+            id="doc-sync",
+            name="Documentation & Changelog Synchronization",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message="CHANGELOG.md is missing. Every project requires an active changelog.",
+        )
+
+    content = changelog_path.read_text(encoding="utf-8")
+    if not content.strip():
+        return AuditCheckResult(
+            id="doc-sync",
+            name="Documentation & Changelog Synchronization",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message="CHANGELOG.md is empty. Document project releases and functional deltas.",
+        )
+
+    # Check version alignment if package manifest exists
+    pyproject_path = project_root / "pyproject.toml"
+    current_ver = None
+    if pyproject_path.exists():
+        match = re.search(r'version\s*=\s*"([^"]+)"', pyproject_path.read_text(encoding="utf-8"))
+        if match:
+            current_ver = match.group(1)
+
+    if current_ver:
+        version_pattern = rf"\[{re.escape(current_ver)}\]|##\s+{re.escape(current_ver)}"
+        if not re.search(version_pattern, content, re.IGNORECASE):
+            return AuditCheckResult(
+                id="doc-sync",
+                name="Documentation & Changelog Synchronization",
+                severity="blocking",
+                status="ran",
+                passed=False,
+                message=f"CHANGELOG.md missing entry for active version '{current_ver}'.",
+            )
+
+    return AuditCheckResult(
+        id="doc-sync",
+        name="Documentation & Changelog Synchronization",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message="CHANGELOG.md and active version documentation synchronized.",
     )
 
 
@@ -1662,6 +1734,7 @@ def run_valdoz_audit(
         "undeclared-imports": scan_undeclared_imports,
         "git-identity": scan_git_identity,
         "audit-anchor": scan_audit_anchor,
+        "doc-sync": scan_doc_sync,
         "semgrep-sast": scan_semgrep,
         "package-hallucination": scan_package_hallucination,
         "license-compliance": scan_license_compliance,

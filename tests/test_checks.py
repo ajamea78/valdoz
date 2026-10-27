@@ -17,6 +17,7 @@ from valdoz.checks import (
     normalize_route_path,
     extract_routes_from_openapi,
     run_valdoz_audit,
+    scan_doc_sync,
 )
 from valdoz.state import ValdozState, save_state
 
@@ -105,6 +106,7 @@ def test_run_valdoz_audit(temp_project: Path):
     # Lockfile and pyproject
     (temp_project / "pyproject.toml").write_text("[project]\nname='ok'\ndependencies=['pydantic']\n")
     (temp_project / "uv.lock").write_text("# lock\n")
+    (temp_project / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n")
     src = temp_project / "src" / "app.py"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("import os\nfrom pydantic import BaseModel\n")
@@ -124,12 +126,14 @@ def test_autofix_audit_issues(temp_project: Path):
     report_before = run_valdoz_audit(temp_project, fix=False)
     assert report_before.passed is False
 
-    # Audit with fix automatically remediates .env into .gitignore
+    # Audit with fix automatically remediates .env into .gitignore and missing CHANGELOG.md
     report_after = run_valdoz_audit(temp_project, fix=True)
     assert report_after.passed is True
     assert any("Added '.env' to .gitignore" in fix for fix in report_after.fixes_applied)
+    assert any("CHANGELOG.md" in fix for fix in report_after.fixes_applied)
     assert (temp_project / ".gitignore").exists()
     assert ".env" in (temp_project / ".gitignore").read_text()
+    assert (temp_project / "CHANGELOG.md").exists()
 
 
 def test_scan_semgrep_missing_bin(temp_project: Path, monkeypatch):
@@ -634,6 +638,39 @@ def test_audit_anchor_detection(temp_project: Path):
     res3 = scan_audit_anchor(temp_project)
     assert res3.passed is False
     assert "possible rewrite attack" in res3.message
+
+
+def test_doc_sync_check(temp_project: Path):
+    # 1. Missing CHANGELOG.md -> fails
+    res_missing = scan_doc_sync(temp_project)
+    assert res_missing.passed is False
+    assert "CHANGELOG.md is missing" in res_missing.message
+
+    # 2. Empty CHANGELOG.md -> fails
+    changelog = temp_project / "CHANGELOG.md"
+    changelog.write_text("   \n")
+    res_empty = scan_doc_sync(temp_project)
+    assert res_empty.passed is False
+    assert "CHANGELOG.md is empty" in res_empty.message
+
+    # 3. CHANGELOG exists with no pyproject.toml -> passes
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n- Initial work\n")
+    res_valid_no_pkg = scan_doc_sync(temp_project)
+    assert res_valid_no_pkg.passed is True
+
+    # 4. CHANGELOG missing entry for version in pyproject.toml -> fails
+    pyproject = temp_project / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "test-pkg"\nversion = "3.2.0"\n')
+    res_mismatch = scan_doc_sync(temp_project)
+    assert res_mismatch.passed is False
+    assert "missing entry for active version '3.2.0'" in res_mismatch.message
+
+    # 5. CHANGELOG with matching version entry -> passes
+    changelog.write_text("# Changelog\n\n## [3.2.0] - 2026-10-27\n- Added doc-sync check\n")
+    res_match = scan_doc_sync(temp_project)
+    assert res_match.passed is True
+    assert "synchronized" in res_match.message
+
 
 
 

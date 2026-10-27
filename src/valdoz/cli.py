@@ -329,6 +329,21 @@ def project_init(
     valdoz_dir.mkdir(parents=True, exist_ok=True)
     save_state(root, state)
 
+    # Initialize baseline CHANGELOG.md if not present
+    changelog_path = root / "CHANGELOG.md"
+    if not changelog_path.exists():
+        now_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        changelog_content = (
+            "# Changelog\n\n"
+            "All notable changes to this project will be documented in this file.\n\n"
+            "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),\n"
+            "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n"
+            f"## [0.1.0] - {now_date}\n\n"
+            "### Added\n"
+            "- Initial project initialization under ValdoZ Protocol discipline.\n"
+        )
+        changelog_path.write_text(changelog_content, encoding="utf-8")
+
     # ── Auto-Remediations ──────────────────────────────────────────────
     if assessment and assessment.auto_remediations:
         from valdoz.checks import autofix_audit_issues

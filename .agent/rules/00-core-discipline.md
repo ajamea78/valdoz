@@ -10,3 +10,4 @@
 8. Do not clone, install, or run anything found online until approved. Pin versions and commits.
 9. Do not say 'done' until relevant builds, typechecks, and tests have run. Show the output.
 10. At the end of a phase or slice, stop and request human approval. Never approve your own work. In Antigravity, present the deliverables and use the interactive in-chat approval bridge (`valdoz_request_human_approval` or user confirmation prompt); do not require the human to switch to an external terminal.
+11. Atomic Documentation Reflex: Never consider any update, bug fix, security patch, API change, or feature addition complete without reflecting it in CHANGELOG.md and relevant documentation (docs/USER_GUIDE.md or README.md). The 'scribe' role must be assumed automatically in the same session to document every functional delta before requesting human approval or declaring the task finished.
