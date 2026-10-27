@@ -440,8 +440,9 @@ ValdoZ automatically checks:
 - **Git Identity Isolation**: Checks local git config (`user.email`, `user.name`, `credential.useHttpPath`) and project vault isolation to prevent accidental cross-account token leaks.
 - **Semgrep AST Static Analysis (`--semgrep`)**: Runs deterministic semantic AST code security scanning across the project to catch injection vulnerabilities, path traversal, dangerous imports, and insecure API usage.
 - **Package Hallucination & Slopsquatting (`--verify-packages`)**: Protects against AI supply-chain attacks by detecting non-existent hallucinated package names and typosquatting/slopsquatting mutations before malicious packages can be installed.
+- **License Compliance & Copyleft Scanner (`--licenses`)**: Scans all declared dependencies for viral copyleft licenses (GPL, AGPL, SSPL) to prevent legal liability and unauthorized IP contamination in proprietary codebases.
 
-### Running Semgrep SAST & Package Registry Verification
+### Running Advanced Security & Compliance Audits
 To trigger AST static security analysis with Semgrep during an audit:
 ```bash
 valdoz audit --semgrep
@@ -450,7 +451,11 @@ To verify all declared dependencies against PyPI/npm live registries and block A
 ```bash
 valdoz audit --verify-packages
 ```
-Or permanently enable the `security` pack so both Semgrep SAST and package hallucination scanning run automatically on gate checks:
+To run open-source license compliance and copyleft checks:
+```bash
+valdoz audit --licenses
+```
+Or permanently enable the `security` pack so Semgrep SAST, package hallucination scanning, and license compliance run automatically on gate checks:
 ```bash
 valdoz pack add security
 ```
