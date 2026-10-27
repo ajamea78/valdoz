@@ -982,6 +982,245 @@ def scan_license_compliance(
     )
 
 
+# ── OpenAPI & API Contract Drift Scanner ─────────────────────────────────────
+def normalize_route_path(p: str) -> str:
+    """Normalizes route path for comparison (converts :param and {param} to canonical placeholder)."""
+    p = p.strip()
+    if not p.startswith("/"):
+        p = "/" + p
+    p = p.rstrip("/")
+    if not p:
+        p = "/"
+    # Convert Express/Nest style :param to {}
+    p = re.sub(r':[a-zA-Z0-9_]+', '{}', p)
+    # Convert OpenAPI / FastAPI style {param} to {}
+    p = re.sub(r'\{[a-zA-Z0-9_]+\}', '{}', p)
+    return p
+
+
+def find_openapi_spec(project_root: Path) -> Optional[Path]:
+    """Locates OpenAPI/Swagger contract specification file in project."""
+    valdozrc = load_valdozrc(project_root)
+    custom_path = valdozrc.get("openapi_spec")
+    if custom_path:
+        p = project_root / custom_path
+        if p.exists():
+            return p
+
+    candidates = [
+        "openapi.yaml", "openapi.yml", "openapi.json",
+        "swagger.yaml", "swagger.yml", "swagger.json",
+        "docs/openapi.yaml", "docs/openapi.yml", "docs/openapi.json",
+        "docs/swagger.yaml", "docs/swagger.yml", "docs/swagger.json",
+        "specs/openapi.yaml", "specs/openapi.yml", "specs/openapi.json",
+        "api/openapi.yaml", "api/openapi.yml", "api/openapi.json",
+    ]
+    for rel in candidates:
+        target = project_root / rel
+        if target.exists():
+            return target
+    return None
+
+
+def extract_routes_from_openapi(spec_path: Path) -> Tuple[Set[Tuple[str, str]], List[str]]:
+    """Extracts (method, normalized_path) tuples from an OpenAPI/Swagger contract spec."""
+    import yaml
+
+    routes: Set[Tuple[str, str]] = set()
+    errors: List[str] = []
+    text = spec_path.read_text(encoding="utf-8", errors="ignore")
+    try:
+        if spec_path.suffix.lower() == ".json":
+            data = json.loads(text)
+        else:
+            data = yaml.safe_load(text)
+    except Exception as e:
+        return set(), [f"Failed to parse OpenAPI file: {e}"]
+
+    if not isinstance(data, dict):
+        return set(), ["OpenAPI spec root must be a YAML/JSON object"]
+
+    if "openapi" not in data and "swagger" not in data:
+        return set(), ["File is missing 'openapi' or 'swagger' version declaration"]
+
+    paths = data.get("paths", {})
+    if not isinstance(paths, dict):
+        return set(), ["OpenAPI 'paths' must be an object/dict"]
+
+    valid_methods = {"get", "post", "put", "delete", "patch", "options", "head"}
+    for raw_path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            continue
+        norm_path = normalize_route_path(raw_path)
+        for m in valid_methods:
+            if m in path_item:
+                routes.add((m.upper(), norm_path))
+
+    return routes, errors
+
+
+def extract_routes_from_python_code(code: str) -> Set[Tuple[str, str]]:
+    """Extracts (method, normalized_path) from Python code (FastAPI, Flask, etc.)."""
+    routes: Set[Tuple[str, str]] = set()
+    # 1. FastAPI style: @app.get("/path"), @router.post("/path")
+    pattern_fastapi = re.compile(
+        r'@(?:[a-zA-Z0-9_]+)\.(get|post|put|delete|patch|options|head)\s*\(\s*["\']([^"\']+)["\']',
+        re.IGNORECASE,
+    )
+    for match in pattern_fastapi.finditer(code):
+        method = match.group(1).upper()
+        path = normalize_route_path(match.group(2))
+        routes.add((method, path))
+
+    # 2. Flask style: @app.route("/path", methods=["GET", "POST"])
+    pattern_flask = re.compile(
+        r'@(?:[a-zA-Z0-9_]+)\.route\s*\(\s*["\']([^"\']+)["\'](?:\s*,\s*methods\s*=\s*\[([^\]]+)\])?',
+        re.IGNORECASE,
+    )
+    for match in pattern_flask.finditer(code):
+        path = normalize_route_path(match.group(1))
+        methods_str = match.group(2)
+        if methods_str:
+            methods = re.findall(r'["\'](GET|POST|PUT|DELETE|PATCH)["\']', methods_str, re.IGNORECASE)
+            for m in methods:
+                routes.add((m.upper(), path))
+        else:
+            routes.add(("GET", path))
+
+    return routes
+
+
+def extract_routes_from_node_code(code: str) -> Set[Tuple[str, str]]:
+    """Extracts (method, normalized_path) from Node code (Express, Nest, etc.)."""
+    routes: Set[Tuple[str, str]] = set()
+    pattern_express = re.compile(
+        r'(?:app|router|api|server)\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']',
+        re.IGNORECASE,
+    )
+    for match in pattern_express.finditer(code):
+        method = match.group(1).upper()
+        path = normalize_route_path(match.group(2))
+        routes.add((method, path))
+    return routes
+
+
+def extract_implemented_routes(project_root: Path) -> Set[Tuple[str, str]]:
+    """Extracts all active route endpoints implemented across Python and Node source files."""
+    routes: Set[Tuple[str, str]] = set()
+    search_dirs = [project_root / d for d in ("src", "app", "api", "routes", "server") if (project_root / d).exists()]
+    if not search_dirs:
+        search_dirs = [project_root]
+
+    ignored_dirs = {".git", ".venv", "venv", "node_modules", "tests", "site", "__pycache__", ".valdoz"}
+
+    for base_dir in search_dirs:
+        for p in base_dir.rglob("*"):
+            if not p.is_file():
+                continue
+            if any(part in p.parts for part in ignored_dirs):
+                continue
+            if p.suffix in (".py",):
+                try:
+                    text = p.read_text(encoding="utf-8", errors="ignore")
+                    routes.update(extract_routes_from_python_code(text))
+                except Exception:
+                    pass
+            elif p.suffix in (".js", ".ts", ".mjs", ".cjs"):
+                try:
+                    text = p.read_text(encoding="utf-8", errors="ignore")
+                    routes.update(extract_routes_from_node_code(text))
+                except Exception:
+                    pass
+
+    return routes
+
+
+def scan_api_contract_drift(project_root: Path) -> AuditCheckResult:
+    """Verifies OpenAPI contract specifications against implemented codebase routes to detect drift."""
+    spec_path = find_openapi_spec(project_root)
+
+    if not spec_path:
+        # Check if project declares an API framework in dependencies
+        manifests = extract_manifest_declared_packages(project_root)
+        all_deps = manifests["pypi"] | manifests["npm"]
+        api_frameworks = {"fastapi", "flask", "django-ninja", "express", "fastify", "@nestjs/core", "koa", "hapi", "restify"}
+        detected_frameworks = all_deps.intersection(api_frameworks)
+
+        if detected_frameworks:
+            return AuditCheckResult(
+                id="api-contract-drift",
+                name="OpenAPI Contract & Schema Drift Scanner",
+                severity="warning",
+                status="ran",
+                passed=False,
+                message=f"API framework ({', '.join(sorted(detected_frameworks))}) detected, but no OpenAPI specification found (looked for openapi.yaml, swagger.json, docs/openapi.yaml). Add an OpenAPI contract to enable schema drift auditing.",
+            )
+        return AuditCheckResult(
+            id="api-contract-drift",
+            name="OpenAPI Contract & Schema Drift Scanner",
+            severity="blocking",
+            status="skipped",
+            passed=True,
+            message="No OpenAPI specification or API framework detected (check skipped).",
+        )
+
+    # Parse OpenAPI specification
+    spec_routes, parse_errors = extract_routes_from_openapi(spec_path)
+    if parse_errors:
+        return AuditCheckResult(
+            id="api-contract-drift",
+            name="OpenAPI Contract & Schema Drift Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"Invalid OpenAPI contract '{spec_path.name}': {'; '.join(parse_errors)}",
+        )
+
+    if not spec_routes:
+        return AuditCheckResult(
+            id="api-contract-drift",
+            name="OpenAPI Contract & Schema Drift Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"OpenAPI contract '{spec_path.name}' defines 0 API routes in 'paths'.",
+        )
+
+    # Extract implemented routes from codebase
+    code_routes = extract_implemented_routes(project_root)
+
+    # Compare
+    unimplemented = sorted(spec_routes - code_routes)
+    undocumented = sorted(code_routes - spec_routes)
+
+    drift_issues: List[str] = []
+    if unimplemented:
+        unimpl_str = ", ".join(f"{m} {p}" for m, p in unimplemented[:3])
+        drift_issues.append(f"{len(unimplemented)} route(s) in contract but unimplemented in code ({unimpl_str})")
+    if undocumented:
+        undoc_str = ", ".join(f"{m} {p}" for m, p in undocumented[:3])
+        drift_issues.append(f"{len(undocumented)} route(s) implemented in code but undocumented in contract ({undoc_str})")
+
+    if drift_issues:
+        return AuditCheckResult(
+            id="api-contract-drift",
+            name="OpenAPI Contract & Schema Drift Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"API contract drift detected in '{spec_path.name}': {'; '.join(drift_issues)}",
+        )
+
+    return AuditCheckResult(
+        id="api-contract-drift",
+        name="OpenAPI Contract & Schema Drift Scanner",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"OpenAPI contract '{spec_path.name}' verified: {len(spec_routes)} routes perfectly aligned with code implementation (0 drift).",
+    )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -1134,6 +1373,7 @@ def run_valdoz_audit(
     semgrep: bool = False,
     verify_packages: bool = False,
     licenses: bool = False,
+    contract: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
     fixes: List[str] = []
@@ -1180,6 +1420,16 @@ def run_valdoz_audit(
             )
         )
 
+    # If --contract explicitly enabled, append api-contract-drift check if not present
+    if contract and not any(c.id in ("api-contract-check", "api-contract-drift") for c in configured_checks):
+        configured_checks.append(
+            PackCheckDefinition(
+                id="api-contract-drift",
+                description="Verify OpenAPI contract alignment and detect route drift",
+                severity="blocking",
+            )
+        )
+
     results: List[AuditCheckResult] = []
 
     # Map check ID to implementation
@@ -1191,6 +1441,8 @@ def run_valdoz_audit(
         "semgrep-sast": scan_semgrep,
         "package-hallucination": scan_package_hallucination,
         "license-compliance": scan_license_compliance,
+        "api-contract-check": scan_api_contract_drift,
+        "api-contract-drift": scan_api_contract_drift,
     }
 
     for chk in configured_checks:
@@ -1201,6 +1453,10 @@ def run_valdoz_audit(
             results.append(res)
         elif chk.id == "license-compliance":
             res = scan_license_compliance(project_root, no_network=no_network)
+            res.severity = chk.severity
+            results.append(res)
+        elif chk.id in ("api-contract-check", "api-contract-drift"):
+            res = scan_api_contract_drift(project_root)
             res.severity = chk.severity
             results.append(res)
         elif chk.id in CHECK_RUNNERS:

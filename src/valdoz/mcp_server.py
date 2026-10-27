@@ -67,6 +67,11 @@ VALDOZ_TOOLS = [
                     "description": "Audit dependency licenses and check copyleft compliance.",
                     "default": False,
                 },
+                "contract": {
+                    "type": "boolean",
+                    "description": "Validate OpenAPI contract spec and detect route/schema drift.",
+                    "default": False,
+                },
             },
         },
     },
@@ -231,6 +236,7 @@ def handle_run_audit(
     semgrep: bool = False,
     verify_packages: bool = False,
     licenses: bool = False,
+    contract: bool = False,
 ) -> Dict[str, Any]:
     report = run_valdoz_audit(
         root,
@@ -239,6 +245,7 @@ def handle_run_audit(
         semgrep=semgrep,
         verify_packages=verify_packages,
         licenses=licenses,
+        contract=contract,
     )
     blocking_cnt = sum(1 for c in report.checks if c.severity == "blocking" and not c.passed)
     warning_cnt = sum(1 for c in report.checks if c.severity == "warning" and not c.passed)
@@ -428,6 +435,7 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             semgrep=arguments.get("semgrep", False),
             verify_packages=arguments.get("verify_packages", False),
             licenses=arguments.get("licenses", False),
+            contract=arguments.get("contract", False),
         )
     elif tool_name == "valdoz_check_gates":
         return handle_check_gates(root, phase_num=arguments.get("phase_num"))

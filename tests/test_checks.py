@@ -9,7 +9,10 @@ from valdoz.checks import (
     scan_semgrep,
     scan_package_hallucination,
     scan_license_compliance,
+    scan_api_contract_drift,
     categorize_license,
+    normalize_route_path,
+    extract_routes_from_openapi,
     run_valdoz_audit,
 )
 from valdoz.state import ValdozState, save_state
@@ -383,6 +386,129 @@ dependencies = [
     assert any(c.id == "license-compliance" for c in report.checks)
     lic_chk = next(c for c in report.checks if c.id == "license-compliance")
     assert lic_chk.passed is True
+
+
+def test_normalize_route_path():
+    assert normalize_route_path("/api/v1/users/:id") == "/api/v1/users/{}"
+    assert normalize_route_path("/api/v1/users/{userId}") == "/api/v1/users/{}"
+    assert normalize_route_path("users") == "/users"
+    assert normalize_route_path("/") == "/"
+
+
+def test_api_contract_no_spec_no_api_framework(temp_project: Path):
+    res = scan_api_contract_drift(temp_project)
+    assert res.status == "skipped"
+    assert res.passed is True
+    assert "No OpenAPI specification" in res.message
+
+
+def test_api_contract_no_spec_with_api_framework(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "api-app"
+dependencies = [
+    "fastapi>=0.100.0",
+]
+""")
+    res = scan_api_contract_drift(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert res.severity == "warning"
+    assert "fastapi" in res.message
+
+
+def test_api_contract_perfect_match(temp_project: Path):
+    openapi_yaml = """
+openapi: 3.0.3
+info:
+  title: Users API
+  version: 1.0.0
+paths:
+  /api/v1/users:
+    get:
+      summary: List users
+    post:
+      summary: Create user
+  /api/v1/users/{userId}:
+    get:
+      summary: Get user
+"""
+    (temp_project / "openapi.yaml").write_text(openapi_yaml)
+
+    src_dir = temp_project / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "main.py").write_text("""
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/api/v1/users")
+def list_users(): return []
+
+@app.post("/api/v1/users")
+def create_user(): return {}
+
+@app.get("/api/v1/users/{id}")
+def get_user(id: int): return {}
+""")
+
+    res = scan_api_contract_drift(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "3 routes perfectly aligned with code implementation (0 drift)" in res.message
+
+
+def test_api_contract_drift_unimplemented_and_undocumented(temp_project: Path):
+    openapi_yaml = """
+openapi: 3.0.3
+info:
+  title: Users API
+  version: 1.0.0
+paths:
+  /api/v1/users:
+    get:
+      summary: List users
+  /api/v1/users/{userId}:
+    delete:
+      summary: Delete user
+"""
+    (temp_project / "openapi.yaml").write_text(openapi_yaml)
+
+    src_dir = temp_project / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "main.py").write_text("""
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/api/v1/users")
+def list_users(): return []
+
+# Missing DELETE /api/v1/users/{userId}
+# Undocumented extra endpoint:
+@app.post("/api/v1/internal/reset")
+def reset(): return {}
+""")
+
+    res = scan_api_contract_drift(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "API contract drift detected" in res.message
+    assert "unimplemented in code" in res.message
+    assert "DELETE /api/v1/users/{}" in res.message
+    assert "undocumented in contract" in res.message
+    assert "POST /api/v1/internal/reset" in res.message
+
+
+def test_run_valdoz_audit_with_contract_flag(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+]
+""")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    report = run_valdoz_audit(temp_project, contract=True)
+    assert any(c.id == "api-contract-drift" for c in report.checks)
+
 
 
 

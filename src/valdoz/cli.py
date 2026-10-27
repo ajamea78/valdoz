@@ -884,8 +884,9 @@ def audit_cmd(
     semgrep: bool = typer.Option(False, "--semgrep", help="Run Semgrep deterministic AST vulnerability analysis"),
     verify_packages: bool = typer.Option(False, "--verify-packages", help="Query PyPI/npm live registries to detect AI-hallucinated and slopsquatted dependencies"),
     licenses: bool = typer.Option(False, "--licenses", help="Audit dependency licenses and check copyleft compliance"),
+    contract: bool = typer.Option(False, "--contract", help="Validate OpenAPI contract spec and detect code-contract drift"),
 ):
-    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination, license compliance)."""
+    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination, license compliance, contract drift)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
@@ -897,6 +898,7 @@ def audit_cmd(
         semgrep=semgrep,
         verify_packages=verify_packages,
         licenses=licenses,
+        contract=contract,
     )
 
     if report.fixes_applied:
