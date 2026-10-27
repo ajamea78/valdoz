@@ -119,7 +119,7 @@ def get_last_audit_entry(project_root: Path) -> Tuple[str, Optional[str]]:
 def canonical_json_bytes(data: Dict[str, Any]) -> bytes:
     """Serializes data structure into deterministic canonical JSON (RFC 8785)."""
     import json
-    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def append_approvals_log(project_root: Path, message: str) -> str:

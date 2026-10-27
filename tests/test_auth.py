@@ -113,7 +113,8 @@ def test_scan_secrets_with_vault(temp_git_repo: Path):
 
 
 def test_clear_project_vault(temp_git_repo: Path):
-    vault_file = setup_project_vault(temp_git_repo, username="u", token="t")
+    tok = "ghp_" + "dummyTestToken1234567890abcdef"
+    vault_file = setup_project_vault(temp_git_repo, username="u", token=tok)
     assert vault_file.exists()
 
     cleared = clear_project_vault(temp_git_repo)

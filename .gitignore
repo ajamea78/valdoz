@@ -1,6 +1,10 @@
 .venv/
 __pycache__/
+**/__pycache__/
 *.pyc
+**/*.pyc
+*.pyo
+**/*.pyo
 .pytest_cache/
 *.egg-info/
 dist/
@@ -9,4 +13,7 @@ site/
 .valdoz/
 .coverage
 coverage.xml
+*.7z
+*.zip
+*.tar.gz
 

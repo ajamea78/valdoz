@@ -58,7 +58,11 @@ def emit_webhook_event(
             )
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:  # nosec B310 # nosemgrep
                 results.append({"url": url, "status": "delivered", "code": resp.status})
+        except urllib.error.HTTPError as e:
+            results.append({"url": url, "status": "failed", "error": f"HTTP {e.code}: {e.reason}"})
+        except urllib.error.URLError:
+            results.append({"url": url, "status": "failed", "error": "Connection failed or host unreachable"})
         except Exception as e:
-            results.append({"url": url, "status": "failed", "error": str(e)})
+            results.append({"url": url, "status": "failed", "error": f"{type(e).__name__}: delivery failure"})
 
     return results

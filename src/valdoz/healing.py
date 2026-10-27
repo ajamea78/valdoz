@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
@@ -113,20 +114,26 @@ def collect_failure_context(
 
     # 3. Identify failing files from trace
     failing_files: List[str] = []
+    root_resolved = project_root.resolve()
     # Pattern for file paths in common test/traceback outputs (absolute or relative)
     matches = re.findall(r"(?:/?(?:[\w\.-]+/)+[\w\.-]+\.(?:py|js|ts|jsx|tsx|json|md))", error_output)
     for m in set(matches):
         p = Path(m)
-        if p.is_absolute() and p.exists():
+        if p.is_absolute():
+            if p.exists() and p.is_file():
+                try:
+                    rel = p.resolve().relative_to(root_resolved)
+                    failing_files.append(rel.as_posix())
+                except ValueError:
+                    pass
+        else:
+            cand = (project_root / m.lstrip("/")).resolve()
             try:
-                rel = p.relative_to(project_root)
-                failing_files.append(rel.as_posix())
+                rel = cand.relative_to(root_resolved)
+                if cand.exists() and cand.is_file():
+                    failing_files.append(rel.as_posix())
             except ValueError:
                 pass
-        else:
-            rel_p = project_root / m.lstrip("/")
-            if rel_p.exists() and rel_p.is_file():
-                failing_files.append(m.lstrip("/"))
 
     return HealingContext(
         failure_type=failure_type,
@@ -306,7 +313,7 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
         from valdoz.checks import run_valdoz_audit
         rep = run_valdoz_audit(project_root, strict=True)
         return rep.passed
-    elif ctx.failure_type == "gate_check":
+    elif ctx.failure_type in ("gate", "gate_check"):
         from valdoz.gates import run_phase_gate_checks
         rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
         return rep.passed
@@ -373,8 +380,9 @@ def generate_patch_diff(project_root: Path, file_patches: Dict[str, str]) -> str
     for rel_path, new_content in file_patches.items():
         clean_rel = Path(rel_path).as_posix().lstrip("/")
         dest = (root_resolved / clean_rel).resolve()
+        is_new = not (dest.exists() and dest.is_file())
         old_content = ""
-        if dest.exists() and dest.is_file():
+        if not is_new:
             try:
                 old_content = dest.read_text(encoding="utf-8", errors="replace")
             except Exception:
@@ -382,17 +390,16 @@ def generate_patch_diff(project_root: Path, file_patches: Dict[str, str]) -> str
 
         old_lines = old_content.splitlines(keepends=True)
         new_lines = new_content.splitlines(keepends=True)
+        fromfile = "/dev/null" if is_new else f"a/{clean_rel}"
+        tofile = f"b/{clean_rel}"
         diff = list(difflib.unified_diff(
             old_lines,
             new_lines,
-            fromfile=f"a/{clean_rel}",
-            tofile=f"b/{clean_rel}",
+            fromfile=fromfile,
+            tofile=tofile,
         ))
         if diff:
             diff_lines.extend(diff)
-        else:
-            diff_lines.append(f"--- /dev/null\n+++ b/{clean_rel}\n")
-            diff_lines.extend(f"+{line}" for line in new_lines)
 
     return "".join(diff_lines)
 
@@ -424,6 +431,10 @@ def run_healing_loop(
     while attempts < max_retries and not success:
         attempts += 1
         ctx.attempt = attempts
+
+        if attempts > 1:
+            backoff_seconds = 2 ** (attempts - 1)
+            time.sleep(backoff_seconds)
 
         prompt = build_diagnosis_prompt(ctx)
         ai_resp = mock_or_call_ai(prompt, model_config)

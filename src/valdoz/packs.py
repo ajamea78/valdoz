@@ -152,7 +152,29 @@ def resolve_active_packs(
                 if pdir and pdir.exists():
                     custom_manifest = pdir / pid / "manifest.yaml"
                     if custom_manifest.exists():
-                        data = yaml.safe_load(custom_manifest.read_text(encoding="utf-8"))
+                        manifest_raw = custom_manifest.read_text(encoding="utf-8")
+                        from valdoz.importer import scan_prompt_injection_patterns, verify_pack_integrity
+
+                        # 1. Prompt injection scan on pack manifest
+                        injections = scan_prompt_injection_patterns(manifest_raw)
+                        if injections:
+                            raise PackSecurityError(
+                                f"Pack '{pid}' rejected due to prompt injection risks: {'; '.join(injections)}"
+                            )
+
+                        # 2. Pack integrity verification against SHA-256 map
+                        project_root = (
+                            pdir.parent.parent
+                            if pdir.name == "packs" and pdir.parent.name == ".valdoz"
+                            else Path.cwd()
+                        )
+                        ok_int, int_errs = verify_pack_integrity(project_root, pid)
+                        if not ok_int:
+                            raise PackSecurityError(
+                                f"Pack '{pid}' failed integrity verification: {'; '.join(int_errs)}"
+                            )
+
+                        data = yaml.safe_load(manifest_raw)
                         packs.append(PackManifest(**data))
                         found = True
                         break

@@ -46,6 +46,18 @@ def setup_project_vault(
     host: str = "github.com",
 ) -> Path:
     """Sets up an isolated, project-scoped Git credential store."""
+    token_clean = token.strip()
+    if not token_clean:
+        raise ValueError("Token cannot be empty.")
+
+    if host.lower() == "github.com":
+        valid_github_prefixes = ("ghp_", "github_pat_", "ghs_", "gho_", "ghu_")
+        if not any(token_clean.startswith(pfx) for pfx in valid_github_prefixes) and len(token_clean) < 20:
+            raise ValueError(
+                "Invalid GitHub Personal Access Token format. "
+                "Expected token starting with 'ghp_' or 'github_pat_' (or minimum 20 characters)."
+            )
+
     git_dir = project_root / ".git"
     if not git_dir.exists():
         raise RuntimeError("Not a git repository (missing .git directory).")
@@ -59,7 +71,7 @@ def setup_project_vault(
     # 2. Reset local credential helper chain to override global ~/.gitconfig helpers
     vault_file = get_project_vault_path(project_root)
     rel_or_abs = str(vault_file.resolve())
-    subprocess.run(["git", "config", "--local", "credential.helper", ""], cwd=project_root, check=True)
+    subprocess.run(["git", "config", "--local", "--replace-all", "credential.helper", ""], cwd=project_root, check=True)
     subprocess.run(["git", "config", "--local", "--add", "credential.helper", f"store --file {rel_or_abs}"], cwd=project_root, check=True)
     subprocess.run(["git", "config", "--local", "credential.useHttpPath", "true"], cwd=project_root, check=True)
 

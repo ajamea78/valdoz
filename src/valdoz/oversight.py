@@ -21,11 +21,25 @@ DEFAULT_BUDGETS = {
     3: 20,   # Stack Decision
     4: 25,   # Architecture and Plan
     5: 80,   # Project Setup
-    6: 250,  # Build slices
+    6: 100,  # Build slices (hardened default)
     7: 60,   # Verify
     8: 40,   # Deploy
     9: 30,   # Handover
     10: 100, # Changes
+}
+
+DEFAULT_TOOL_CALL_BUDGETS = {
+    0: 30,
+    1: 40,
+    2: 40,
+    3: 40,
+    4: 50,
+    5: 160,
+    6: 200,
+    7: 120,
+    8: 80,
+    9: 60,
+    10: 200,
 }
 
 
@@ -84,14 +98,25 @@ def check_behavioral_budget(project_root: Path, phase_num: int) -> Tuple[bool, O
     from valdoz.packs import load_valdozrc
     valdozrc = load_valdozrc(project_root)
     custom_budgets = valdozrc.get("oversight", {}).get("behavioral_budget", {})
-    limit = custom_budgets.get(str(phase_num), DEFAULT_BUDGETS.get(phase_num, 100))
+    write_limit = custom_budgets.get(
+        f"phase_{phase_num}_file_writes",
+        custom_budgets.get(str(phase_num), DEFAULT_BUDGETS.get(phase_num, 100)),
+    )
+    tool_limit = custom_budgets.get(
+        f"phase_{phase_num}_tool_calls",
+        DEFAULT_TOOL_CALL_BUDGETS.get(phase_num, 200),
+    )
 
     data = load_telemetry(project_root)
     p_key = str(phase_num)
-    writes = data.get("phases", {}).get(p_key, {}).get("file_writes", 0)
+    phase_stats = data.get("phases", {}).get(p_key, {})
+    writes = phase_stats.get("file_writes", 0)
+    tool_calls = phase_stats.get("tool_calls", 0)
 
-    if writes > limit:
-        return False, f"Behavioral budget exceeded in Phase {phase_num}: {writes} file writes executed (threshold: {limit})."
+    if writes > write_limit:
+        return False, f"Behavioral budget exceeded in Phase {phase_num}: {writes} file writes executed (threshold: {write_limit})."
+    if tool_calls > tool_limit:
+        return False, f"Behavioral budget exceeded in Phase {phase_num}: {tool_calls} tool calls executed (threshold: {tool_limit})."
     return True, None
 
 
@@ -124,14 +149,15 @@ def generate_semantic_diff_summary(
     else:
         summary = resp.strip()
 
-    # Log to history
+    # Log to history with secret redaction
     if project_root:
+        from valdoz.healing import redact_secrets_in_text
         history_file = project_root / ".valdoz" / "history" / "semantic_diffs.jsonl"
         history_file.parent.mkdir(parents=True, exist_ok=True)
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "summary": summary,
-            "diff_snippet": diff_text[:1000],
+            "diff_snippet": redact_secrets_in_text(diff_text[:1000]),
         }
         with open(history_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")

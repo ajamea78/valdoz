@@ -457,10 +457,16 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
     elif tool_name == "valdoz_request_human_approval":
         return handle_request_human_approval(root, phase_num=arguments.get("phase_num"))
     elif tool_name == "valdoz_approve_with_human_token":
+        phase_num = arguments.get("phase_num")
+        human_token = arguments.get("human_token")
+        if phase_num is None:
+            return {"error": "phase_num is required"}
+        if not human_token:
+            return {"error": "human_token is required"}
         return handle_approve_with_token(
             root,
-            phase_num=arguments["phase_num"],
-            human_token=arguments["human_token"],
+            phase_num=phase_num,
+            human_token=human_token,
             confirmation=arguments.get("confirmation"),
         )
     elif tool_name == "valdoz_heal":
@@ -475,23 +481,52 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
         return get_project_vault_status(root)
     elif tool_name == "valdoz_auth_setup":
         from valdoz.auth import setup_project_vault
-        username = arguments["username"]
-        token = arguments["token"]
+        username = arguments.get("username")
+        token = arguments.get("token")
+        if not username:
+            return {"error": "username is required"}
+        if not token:
+            return {"error": "token is required"}
         host = arguments.get("host", "github.com")
-        vault_path = setup_project_vault(root, username=username, token=token, host=host)
-        return {
-            "status": "success",
-            "message": f"Project credential vault configured at {vault_path}",
-            "vault_path": str(vault_path),
-        }
+        try:
+            vault_path = setup_project_vault(root, username=username, token=token, host=host)
+            rel_vault = (
+                vault_path.relative_to(root).as_posix()
+                if vault_path.is_relative_to(root)
+                else ".valdoz/.git-credentials"
+            )
+            return {
+                "status": "success",
+                "message": f"Project credential vault configured at {rel_vault}",
+                "vault_path": rel_vault,
+            }
+        except Exception as e:
+            return {"error": str(e)}
     return {"error": f"Unknown tool: {tool_name}"}
 
 
 def run_stdio_server(project_root: Optional[Path] = None):
     """Runs standard stdio MCP protocol loop."""
     root = project_root or find_project_root()
+    max_mcp_line_bytes = 1_048_576  # 1MB request cap
 
     for line in sys.stdin:
+        if len(line) > max_mcp_line_bytes:
+            sys.stdout.write(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {
+                            "code": -32600,
+                            "message": "Request line exceeds maximum limit of 1MB (1,048,576 bytes)",
+                        },
+                    }
+                )
+                + "\n"
+            )
+            sys.stdout.flush()
+            continue
         if not line.strip():
             continue
         try:
