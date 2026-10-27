@@ -7,3 +7,6 @@ dist/
 build/
 site/
 .valdoz/
+.coverage
+coverage.xml
+

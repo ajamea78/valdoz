@@ -1,0 +1,58 @@
+name: Test Suite & Coverage
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.3.0
+        with:
+          version: "latest"
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.4.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: Run Pytest with Coverage
+        run: |
+          uv run pytest -v --cov=src/valdoz --cov-report=term --cov-report=xml
+
+      - name: Verify Runtime Synchronization
+        run: |
+          uv run valdoz sync-runtimes
+          git diff --exit-code AGENTS.md GEMINI.md .agent/ || (echo "Runtime files out of sync! Run 'valdoz sync-runtimes' locally and commit." && exit 1)

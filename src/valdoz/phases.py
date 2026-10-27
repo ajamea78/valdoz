@@ -10,7 +10,7 @@ import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel
 
 from valdoz.state import (
@@ -171,6 +171,94 @@ def verify_audit_log_integrity(project_root: Path) -> Tuple[bool, List[str]]:
         expected_prev = chain_hash
 
     return len(violations) == 0, violations
+
+
+def anchor_audit_log(project_root: Path) -> Dict[str, Any]:
+    """Anchors the current head hash of approvals.log to .valdoz/anchor.json and optional git tag.
+
+    Prevents retroactive end-to-end rewrite attacks on mutable file storage.
+    """
+    import json
+    import subprocess
+
+    head_hash, last_line = get_last_audit_entry(project_root)
+    if head_hash == GENESIS_HASH:
+        return {"status": "skipped", "message": "No approvals logged to anchor yet."}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    short_hash = head_hash[:12]
+    tag_name = f"valdoz-anchor-{short_hash}"
+
+    git_commit: Optional[str] = None
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        pass
+
+    anchor_data = {
+        "anchored_at": now_iso,
+        "head_hash": head_hash,
+        "short_hash": short_hash,
+        "git_commit": git_commit,
+        "git_tag": tag_name,
+    }
+
+    anchor_path = project_root / ".valdoz" / "anchor.json"
+    anchor_path.parent.mkdir(parents=True, exist_ok=True)
+    anchor_path.write_text(json.dumps(anchor_data, indent=2), encoding="utf-8")
+
+    # Optionally create lightweight git tag if in a git repository
+    if git_commit:
+        try:
+            subprocess.run(
+                ["git", "tag", "-f", tag_name],
+                cwd=project_root,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
+    return {
+        "status": "anchored",
+        "head_hash": head_hash,
+        "git_tag": tag_name,
+        "git_commit": git_commit,
+        "anchor_file": str(anchor_path),
+    }
+
+
+def verify_external_anchor(project_root: Path) -> Tuple[bool, str]:
+    """Cross-verifies approvals.log against the external anchor record."""
+    import json
+    anchor_path = project_root / ".valdoz" / "anchor.json"
+    if not anchor_path.exists():
+        return True, "No anchor record configured (advisory)."
+
+    try:
+        data = json.loads(anchor_path.read_text(encoding="utf-8"))
+        anchored_hash = data.get("head_hash")
+    except Exception as e:
+        return False, f"Failed to read anchor record: {e}"
+
+    if not anchored_hash:
+        return False, "Malformed anchor record: missing 'head_hash'."
+
+    log_path = project_root / ".valdoz" / "approvals.log"
+    if not log_path.exists():
+        return False, f"Anchor violation: approvals.log missing while anchor expects '{anchored_hash[:12]}...'"
+
+    log_content = log_path.read_text(encoding="utf-8")
+    if anchored_hash not in log_content:
+        return False, f"Anchor violation: anchored hash '{anchored_hash[:12]}...' not found in approvals.log (possible rewrite attack)."
+
+    return True, f"Verified against anchor (anchored at {data.get('anchored_at')})"
 
 
 def create_deliverable_stubs(project_root: Path, phase_num: int) -> None:

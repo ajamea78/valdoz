@@ -616,6 +616,14 @@ def research_fetch(
         console.print(f"[bold red]Fetch Blocked:[/bold red] Destination host '{hostname}' is not permitted (metadata or loopback address).")
         raise typer.Exit(1)
 
+    root = find_project_root()
+    from valdoz.packs import load_valdozrc
+    valdozrc = load_valdozrc(root)
+    allowed_domains = valdozrc.get("governance", {}).get("research", {}).get("allowed_domains", [])
+    if allowed_domains and not any(hostname == d.lower() or hostname.endswith("." + d.lower()) for d in allowed_domains):
+        console.print(f"[bold red]Fetch Blocked:[/bold red] Host '{hostname}' is not in configured research allowlist.")
+        raise typer.Exit(1)
+
     try:
         req = urllib.request.Request(
             url,
@@ -938,6 +946,33 @@ def audit_cmd(
         console.print("\n[bold green]✓ ValdoZ Audit Passed![/bold green]")
     else:
         console.print("\n[bold red]✗ ValdoZ Audit Failed![/bold red] Resolve blocking issues above (or run 'valdoz audit --fix').")
+        raise typer.Exit(1)
+
+
+@app.command("anchor")
+def anchor_cmd():
+    """Anchors current audit trail head hash to .valdoz/anchor.json and Git tag."""
+    from valdoz.phases import anchor_audit_log
+    root = find_project_root()
+    res = anchor_audit_log(root)
+    if res.get("status") == "anchored":
+        console.print(f"[bold green]✓ Audit log anchored:[/bold green] Head hash [cyan]{res['head_hash'][:16]}...[/cyan]")
+        if res.get("git_tag"):
+            console.print(f"  Git tag created: [cyan]{res['git_tag']}[/cyan]")
+    else:
+        console.print(f"[yellow]{res.get('message', 'Skipped')}[/yellow]")
+
+
+@app.command("verify-anchor")
+def verify_anchor_cmd():
+    """Verifies approvals.log against the external anchor record."""
+    from valdoz.phases import verify_external_anchor
+    root = find_project_root()
+    ok, msg = verify_external_anchor(root)
+    if ok:
+        console.print(f"[bold green]✓ {msg}[/bold green]")
+    else:
+        console.print(f"[bold red]✗ {msg}[/bold red]")
         raise typer.Exit(1)
 
 
@@ -1643,3 +1678,111 @@ def auth_clear(
 
 
 
+
+
+@app.command("install-browser")
+def install_browser():
+    """Installs Playwright Chromium browser for visual regression testing."""
+    import subprocess
+    try:
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+        console.print("[bold green]✓ Chromium browser installed successfully for Playwright.[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Failed to install Chromium:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command("visual-diff")
+def visual_diff_cmd(
+    url: str = typer.Argument(..., help="URL to capture and compare"),
+    name: Optional[str] = typer.Option(None, help="Baseline name (default: derived from URL)"),
+    threshold: float = typer.Option(0.02, help="Max fraction of changed pixels"),
+    update_baseline: bool = typer.Option(False, "--update-baseline", help="Replace the stored baseline"),
+    full_page: bool = typer.Option(False, "--full-page", help="Capture the full page, not just the viewport"),
+):
+    """Pixel-diff a URL against a committed baseline in .valdoz/baselines/ (SCAR-CORE-006)."""
+    try:
+        from playwright.sync_api import sync_playwright
+        import numpy as np
+        from PIL import Image
+    except ImportError as e:
+        console.print(
+            f"[bold red]❌ Visual regression testing requires extra dependencies:[/bold red] {e}\n"
+            "Please install the optional 'dev' extras:\n"
+            "    [cyan]uv tool install --editable '.[dev]' --force[/cyan]\n"
+            "or:\n"
+            "    [cyan]pip install 'valdoz-protocol[dev]'[/cyan]"
+        )
+        raise typer.Exit(2)
+
+    root = find_project_root()
+    base_dir = root / ".valdoz" / "baselines"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    slug = name or re.sub(r"[^a-z0-9]+", "-", url.lower()).strip("-")[:60]
+    baseline = base_dir / f"{slug}.png"
+    current = base_dir / f"{slug}.current.png"
+    diffp = base_dir / f"{slug}.diff.png"
+
+    try:
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.launch(headless=True)
+            except Exception as e:
+                console.print(
+                    f"[bold red]❌ Chromium is not installed or failed to launch:[/bold red] {e}\n"
+                    "Run: [cyan]valdoz install-browser[/cyan] or [cyan]playwright install chromium[/cyan]"
+                )
+                raise typer.Exit(2)
+            try:
+                ctx = browser.new_context(viewport={"width": 1440, "height": 900}, reduced_motion="reduce")
+                page = ctx.new_page()
+                page.goto(url, wait_until="networkidle", timeout=15000)
+                page.screenshot(path=str(current), full_page=full_page)
+            finally:
+                browser.close()
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[bold red]❌ Failed to capture URL '{url}':[/bold red] {e}")
+        raise typer.Exit(2)
+
+    if not baseline.exists():
+        if os.environ.get("CI"):
+            console.print(f"[bold red]❌ Baseline missing in CI:[/bold red] {baseline} must be committed beforehand.")
+            raise typer.Exit(1)
+        import shutil
+        shutil.copyfile(current, baseline)
+        console.print(f"[bold green]✓ Baseline established:[/bold green] {baseline}")
+        return
+
+    if update_baseline:
+        import shutil
+        shutil.copyfile(current, baseline)
+        console.print(f"[bold green]✓ Baseline updated:[/bold green] {baseline}")
+        return
+
+    try:
+        img_base = Image.open(baseline).convert("RGB")
+        img_curr = Image.open(current).convert("RGB")
+        if img_base.size != img_curr.size:
+            img_curr = img_curr.resize(img_base.size)
+        arr_base = np.array(img_base, dtype=np.int16)
+        arr_curr = np.array(img_curr, dtype=np.int16)
+        diff = np.abs(arr_base - arr_curr)
+        changed_pixels = np.any(diff > 30, axis=2)
+        total_pixels = changed_pixels.size
+        ratio = float(np.sum(changed_pixels)) / float(total_pixels)
+
+        if ratio > threshold:
+            diff_img = Image.fromarray((changed_pixels * 255).astype(np.uint8))
+            diff_img.save(diffp)
+            console.print(f"[bold red]FAILED:[/bold red] Visual difference {ratio:.4f} exceeds threshold {threshold:.4f} of pixels.")
+            console.print(f"Artifacts saved:\n  Current: {current}\n  Diff: {diffp}")
+            raise typer.Exit(1)
+        else:
+            console.print(f"[bold green]PASSED:[/bold green] Visual diff {ratio:.4f} is within threshold {threshold:.4f}.")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[bold red]❌ Image comparison error:[/bold red] {e}")
+        raise typer.Exit(2)

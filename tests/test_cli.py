@@ -15,9 +15,10 @@ def run_in_tmp(tmp_path: Path, monkeypatch):
 
 
 def test_cli_version():
+    from valdoz import __version__
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "ValdoZ Protocol version 3.0.0" in result.output
+    assert f"ValdoZ Protocol version {__version__}" in result.output
 
 
 def test_cli_project_init_and_status(run_in_tmp: Path):
@@ -303,6 +304,43 @@ def test_cli_project_init_brownfield_and_signoff_flag(run_in_tmp: Path):
     state = load_state(run_in_tmp)
     # Check that phase 1 is not auto-approved
     assert state.phases["1"].status != "approved"
+
+
+def test_cli_visual_diff_missing_baseline_in_ci(run_in_tmp: Path, monkeypatch):
+    monkeypatch.setenv("CI", "true")
+    # Mock playwright capture
+    from unittest.mock import patch
+    with patch("playwright.sync_api.sync_playwright") as mock_pw:
+        mock_browser = mock_pw.return_value.__enter__.return_value.chromium.launch.return_value
+        mock_ctx = mock_browser.new_context.return_value
+        mock_page = mock_ctx.new_page.return_value
+        # Creating dummy current image
+        def fake_screenshot(path, **kwargs):
+            from PIL import Image
+            img = Image.new("RGB", (100, 100), color="blue")
+            img.save(path)
+        mock_page.screenshot.side_effect = fake_screenshot
+
+        res = runner.invoke(app, ["visual-diff", "http://example.com/test", "--name", "test-page"])
+        assert res.exit_code == 1
+        assert "Baseline missing in CI" in res.output
+
+
+def test_cli_visual_diff_graceful_missing_dependencies():
+    import builtins
+    real_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if name in ("playwright.sync_api", "playwright"):
+            raise ImportError("No module named 'playwright'")
+        return real_import(name, *args, **kwargs)
+
+    from unittest.mock import patch
+    with patch("builtins.__import__", side_effect=mock_import):
+        res = runner.invoke(app, ["visual-diff", "http://example.com/test"])
+        assert res.exit_code == 2
+        assert "Visual regression testing requires extra dependencies" in res.output
+
 
 
 

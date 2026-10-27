@@ -608,6 +608,35 @@ dependencies = [
     assert any(c.id == "container-hardening" for c in report.checks)
 
 
+def test_audit_anchor_detection(temp_project: Path):
+    from valdoz.phases import append_approvals_log, anchor_audit_log, verify_external_anchor
+    from valdoz.checks import scan_audit_anchor
+
+    # Initially without anchor
+    res = scan_audit_anchor(temp_project)
+    assert res.passed is True
+    assert "advisory" in res.message
+
+    # Log approval and anchor
+    append_approvals_log(temp_project, "Phase 1 approved")
+    anchor_info = anchor_audit_log(temp_project)
+    assert anchor_info["status"] == "anchored"
+
+    # Now verify anchor
+    res2 = scan_audit_anchor(temp_project)
+    assert res2.passed is True
+    assert "Verified against anchor" in res2.message
+
+    # Simulate rewrite attack: replace approvals.log with completely different hash
+    log_path = temp_project / ".valdoz" / "approvals.log"
+    log_path.write_text("[2026-01-01T00:00:00Z] [CHAIN:0000000000000000000000000000000000000000000000000000000000000000] [PREV:genesis] Fake log\n")
+
+    res3 = scan_audit_anchor(temp_project)
+    assert res3.passed is False
+    assert "possible rewrite attack" in res3.message
+
+
+
 
 
 

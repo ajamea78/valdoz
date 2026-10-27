@@ -277,12 +277,19 @@ def check_research_staleness(project_root: Path) -> List[Dict[str, Any]]:
 
 
 def sanitize_and_wrap_content(raw_content: str, source_url: str) -> str:
-    """Sanitizes fetched content and embeds boundary delimiters (Gap 4 defense)."""
+    """Sanitizes fetched content and embeds boundary delimiters (Gap 4 defense).
+
+    Strips script/style tags, comments, ANSI escape sequences, and ASCII control characters.
+    """
     # 1. Strip script tags, style tags, and dangerous HTML
     clean = re.sub(r"<(script|style|iframe|object|embed)[^>]*>.*?</\1>", "", raw_content, flags=re.DOTALL | re.IGNORECASE)
     # 2. Strip comments
     clean = re.sub(r"<!--.*?-->", "", clean, flags=re.DOTALL)
-    # 3. Unescape entities for clean plain text readability
+    # 3. Strip ANSI terminal escape sequences
+    clean = re.sub(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", clean)
+    # 4. Strip unprintable ASCII control characters (preserving tab and newline)
+    clean = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", clean)
+    # 5. Unescape entities for clean plain text readability
     clean = html.unescape(clean).strip()
 
     delimiter_start = f"=== EXTERNAL UNTRUSTED DATA BEGIN (Source: {source_url}) ==="

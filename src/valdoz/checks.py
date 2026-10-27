@@ -1563,6 +1563,20 @@ def autofix_audit_issues(project_root: Path) -> List[str]:
     return actions_taken
 
 
+def scan_audit_anchor(project_root: Path) -> AuditCheckResult:
+    """Verifies that approvals.log matches the external anchor record if configured."""
+    from valdoz.phases import verify_external_anchor
+    ok, msg = verify_external_anchor(project_root)
+    return AuditCheckResult(
+        id="audit-anchor",
+        name="External Audit Trail Anchoring",
+        severity="blocking",
+        status="ran",
+        passed=ok,
+        message=msg,
+    )
+
+
 def run_valdoz_audit(
     project_root: Path,
     strict: bool = False,
@@ -1647,6 +1661,7 @@ def run_valdoz_audit(
         "lockfile-check": scan_lockfile,
         "undeclared-imports": scan_undeclared_imports,
         "git-identity": scan_git_identity,
+        "audit-anchor": scan_audit_anchor,
         "semgrep-sast": scan_semgrep,
         "package-hallucination": scan_package_hallucination,
         "license-compliance": scan_license_compliance,

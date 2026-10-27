@@ -15,8 +15,10 @@ from valdoz.gates import GateCheck, GateReport, run_phase_gate_checks
 from valdoz.phases import (
     PHASE_NAMES,
     advance_phase,
+    anchor_audit_log,
     reopen_phase,
     verify_audit_log_integrity,
+    verify_external_anchor,
 )
 from valdoz.slices import approve_slice, done_slice, start_slice
 from valdoz.state import (
@@ -28,7 +30,7 @@ from valdoz.state import (
     verify_phase_integrity,
 )
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 __all__ = [
     "__version__",
@@ -40,6 +42,7 @@ __all__ = [
     "PHASE_NAMES",
     "ValdozState",
     "advance_phase",
+    "anchor_audit_log",
     "approve_phase",
     "approve_slice",
     "done_slice",
@@ -52,6 +55,7 @@ __all__ = [
     "save_state",
     "start_slice",
     "verify_audit_log_integrity",
+    "verify_external_anchor",
     "verify_phase_integrity",
 ]
 

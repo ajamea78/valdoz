@@ -1,0 +1,11 @@
+# ValdoZ Protocol Codeowners
+* @ajamea78
+
+# Core Protocol & Security Engine
+/src/valdoz/ @ajamea78
+/.github/workflows/ @ajamea78
+
+# Documentation & Governance Ledgers
+/docs/ @ajamea78
+/SCARS.md @ajamea78
+/CHANGELOG.md @ajamea78

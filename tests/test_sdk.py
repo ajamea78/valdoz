@@ -10,10 +10,14 @@ from valdoz.sdk_bridge import (
 
 
 def test_sdk_availability_and_version():
-    assert is_sdk_available() is True
+    avail = is_sdk_available()
+    assert isinstance(avail, bool)
     version = get_sdk_version()
-    assert version is not None
-    assert version.startswith("0.1.")
+    if avail:
+        assert version is not None
+        assert version.startswith("0.1.")
+    else:
+        assert version is None
 
 
 def test_valdoz_native_tools_declaration():

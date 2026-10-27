@@ -51,5 +51,6 @@ markdown_extensions:
 nav:
   - Overview: index.md
   - Complete User Guide: USER_GUIDE.md
+  - Threat Model: THREAT_MODEL.md
   - Migration Guide: MIGRATION.md
   - Strategy & Commercialization: marketing/PITCH_AND_MARKETING.md

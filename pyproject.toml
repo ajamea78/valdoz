@@ -1,27 +1,43 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21.0,<2.0.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "valdoz-protocol"
-version = "3.0.0"
-description = "Antigravity delivery discipline engine"
+version = "3.1.0"
+description = "Antigravity delivery discipline and AI pair-programming governance engine"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "ValdoZ Contributors" }
 ]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
-    "typer>=0.12.0",
-    "pydantic>=2.5.0",
-    "rich>=13.0.0",
-    "pyyaml>=6.0.0",
+    "typer>=0.12.0,<1.0.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "rich>=13.0.0,<16.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
     "playwright>=1.40.0",
     "pillow>=10.0.0",
     "numpy>=1.26.0",
@@ -30,6 +46,13 @@ dev = [
 sdk = [
     "google-antigravity>=0.1.22",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ajamea78/valdoz"
+Documentation = "https://ajamea78.github.io/valdoz/"
+Repository = "https://github.com/ajamea78/valdoz.git"
+Issues = "https://github.com/ajamea78/valdoz/issues"
+Changelog = "https://github.com/ajamea78/valdoz/blob/main/CHANGELOG.md"
 
 [project.scripts]
 valdoz = "valdoz.cli:app"
@@ -40,3 +63,21 @@ packages = ["src/valdoz"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["src/valdoz"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_configs = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
