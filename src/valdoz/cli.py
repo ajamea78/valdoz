@@ -883,8 +883,9 @@ def audit_cmd(
     fix: bool = typer.Option(False, "--fix", help="Automatically remediate safe audit failures (e.g. add .env to .gitignore, generate lockfile)"),
     semgrep: bool = typer.Option(False, "--semgrep", help="Run Semgrep deterministic AST vulnerability analysis"),
     verify_packages: bool = typer.Option(False, "--verify-packages", help="Query PyPI/npm live registries to detect AI-hallucinated and slopsquatted dependencies"),
+    licenses: bool = typer.Option(False, "--licenses", help="Audit dependency licenses and check copyleft compliance"),
 ):
-    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination)."""
+    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination, license compliance)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
@@ -895,6 +896,7 @@ def audit_cmd(
         fix=fix,
         semgrep=semgrep,
         verify_packages=verify_packages,
+        licenses=licenses,
     )
 
     if report.fixes_applied:

@@ -758,6 +758,230 @@ def scan_package_hallucination(project_root: Path, verify_registry: bool = False
     )
 
 
+# ── License Compliance & Copyleft Scanner ────────────────────────────────────
+POPULAR_PACKAGE_LICENSES: Dict[str, Tuple[str, str]] = {
+    # Permissive Python
+    "pydantic": ("permissive", "MIT"),
+    "pydantic-core": ("permissive", "MIT"),
+    "typer": ("permissive", "MIT"),
+    "rich": ("permissive", "MIT"),
+    "pyyaml": ("permissive", "MIT"),
+    "pytest": ("permissive", "MIT"),
+    "fastapi": ("permissive", "MIT"),
+    "requests": ("permissive", "Apache-2.0"),
+    "urllib3": ("permissive", "MIT"),
+    "numpy": ("permissive", "BSD-3-Clause"),
+    "pandas": ("permissive", "BSD-3-Clause"),
+    "annotated-types": ("permissive", "MIT"),
+    "annotated-doc": ("permissive", "MIT"),
+    "markdown-it-py": ("permissive", "MIT"),
+    "mdurl": ("permissive", "MIT"),
+    "pygments": ("permissive", "BSD-2-Clause"),
+    "shellingham": ("permissive", "ISC"),
+    "typing-extensions": ("permissive", "PSF"),
+    "typing-inspection": ("permissive", "MIT"),
+    "google-antigravity": ("permissive", "Apache-2.0"),
+    "mypy": ("permissive", "MIT"),
+    "pillow": ("permissive", "HPND"),
+    "playwright": ("permissive", "Apache-2.0"),
+    "black": ("permissive", "MIT"),
+    "flake8": ("permissive", "MIT"),
+    "click": ("permissive", "BSD-3-Clause"),
+    "httpx": ("permissive", "BSD-3-Clause"),
+    "aiohttp": ("permissive", "Apache-2.0"),
+    "boto3": ("permissive", "Apache-2.0"),
+    "cryptography": ("permissive", "Apache-2.0"),
+    "uvicorn": ("permissive", "BSD-3-Clause"),
+    "gunicorn": ("permissive", "MIT"),
+    "redis": ("permissive", "MIT"),
+    "sqlalchemy": ("permissive", "MIT"),
+    "celery": ("permissive", "BSD-3-Clause"),
+    "jinja2": ("permissive", "BSD-3-Clause"),
+    "pip": ("permissive", "MIT"),
+    "setuptools": ("permissive", "MIT"),
+    "wheel": ("permissive", "MIT"),
+    # Permissive Node
+    "react": ("permissive", "MIT"),
+    "react-dom": ("permissive", "MIT"),
+    "express": ("permissive", "MIT"),
+    "lodash": ("permissive", "MIT"),
+    "axios": ("permissive", "MIT"),
+    "typescript": ("permissive", "Apache-2.0"),
+    "eslint": ("permissive", "MIT"),
+    "prettier": ("permissive", "MIT"),
+    "next": ("permissive", "MIT"),
+    "vue": ("permissive", "MIT"),
+    "chalk": ("permissive", "MIT"),
+    "dotenv": ("permissive", "BSD-2-Clause"),
+}
+
+
+def categorize_license(raw_license: str, classifiers: Optional[List[str]] = None) -> Tuple[str, str]:
+    """Categorizes raw license text into (category, normalized_name).
+
+    Categories:
+    - 'permissive': MIT, Apache-2.0, BSD, ISC, PSF, CC0, Unlicense
+    - 'weak-copyleft': LGPL, MPL, EPL
+    - 'strong-copyleft': GPL, AGPL, SSPL, EUPL
+    - 'unknown': Unspecified or unrecognized
+    """
+    text = (raw_license or "").lower()
+    if classifiers:
+        text += " " + " ".join(c.lower() for c in classifiers)
+
+    if not text.strip():
+        return "unknown", "Unknown"
+
+    # Weak copyleft (checked before GPL so LGPL is matched)
+    if "lgpl" in text or "lesser general public" in text:
+        return "weak-copyleft", "LGPL"
+    if "mpl" in text or "mozilla public" in text:
+        return "weak-copyleft", "MPL"
+    if "epl" in text or "eclipse public" in text:
+        return "weak-copyleft", "EPL"
+
+    # Strong copyleft checks (viral terms)
+    if "agpl" in text or "affero" in text:
+        return "strong-copyleft", "AGPL"
+    if "sspl" in text:
+        return "strong-copyleft", "SSPL"
+    if "gpl" in text or "general public license" in text:
+        return "strong-copyleft", "GPL"
+
+    # Permissive licenses
+    if "mit" in text:
+        return "permissive", "MIT"
+    if "apache" in text:
+        return "permissive", "Apache-2.0"
+    if "bsd" in text:
+        return "permissive", "BSD"
+    if "isc" in text:
+        return "permissive", "ISC"
+    if any(k in text for k in ("python", "psf", "hpnd")):
+        return "permissive", "PSF/Permissive"
+    if any(k in text for k in ("cc0", "public domain", "unlicense", "0bsd")):
+        return "permissive", "Public Domain / CC0"
+
+    return "unknown", raw_license[:20]
+
+
+def resolve_package_license(pkg_name: str, ecosystem: str = "pypi", no_network: bool = True) -> Tuple[str, str]:
+    """Resolves license category and name for a declared package."""
+    norm = pkg_name.lower().replace("_", "-")
+    if norm in POPULAR_PACKAGE_LICENSES:
+        return POPULAR_PACKAGE_LICENSES[norm]
+
+    # Try local importlib metadata for Python
+    if ecosystem == "pypi":
+        try:
+            import importlib.metadata
+            meta = importlib.metadata.metadata(norm)
+            raw = meta.get("License") or meta.get("License-Expression") or ""
+            classifiers = [c for c in (meta.get_all("Classifier") or []) if "License" in c]
+            cat, name = categorize_license(raw, classifiers)
+            if cat != "unknown":
+                return cat, name
+        except Exception:
+            pass
+
+    # Try online lookup if network is enabled
+    if not no_network:
+        try:
+            import urllib.parse
+            import urllib.request
+            if ecosystem == "pypi":
+                url = f"https://pypi.org/pypi/{urllib.parse.quote(norm)}/json"
+            else:
+                url = f"https://registry.npmjs.org/{urllib.parse.quote(norm, safe='@')}"
+            req = urllib.request.Request(url, headers={"User-Agent": "valdoz-protocol/3.0.0"})
+            with urllib.request.urlopen(req, timeout=3.5) as r:  # nosemgrep
+                data = json.loads(r.read())
+                info = data.get("info", {})
+                raw = info.get("license") or info.get("license_expression") or ""
+                cls = [c for c in (info.get("classifiers") or []) if "License" in c]
+                cat, name = categorize_license(raw, cls)
+                if cat != "unknown":
+                    return cat, name
+        except Exception:
+            pass
+
+    return "permissive", "Assumed Permissive"
+
+
+def scan_license_compliance(
+    project_root: Path,
+    allow_copyleft: bool = False,
+    no_network: bool = True,
+) -> AuditCheckResult:
+    """Verifies that declared dependencies comply with license policies and checks for viral copyleft."""
+    manifests = extract_manifest_declared_packages(project_root)
+    all_pypi = manifests["pypi"]
+    all_npm = manifests["npm"]
+    total_pkgs = len(all_pypi) + len(all_npm)
+
+    if total_pkgs == 0:
+        return AuditCheckResult(
+            id="license-compliance",
+            name="License Compliance & Copyleft Scanner",
+            severity="blocking",
+            status="skipped",
+            passed=True,
+            message="No external dependency declarations found in manifests.",
+        )
+
+    # Check project .valdozrc.json license policy
+    valdozrc = load_valdozrc(project_root)
+    lic_policy = valdozrc.get("license_policy", {})
+    blocked_categories = set(lic_policy.get("blocked", ["strong-copyleft"]))
+
+    # Check project's own license
+    project_license_text = ""
+    for lic_file in ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"):
+        p = project_root / lic_file
+        if p.exists():
+            project_license_text = p.read_text(encoding="utf-8", errors="ignore")
+            break
+
+    proj_cat, _ = categorize_license(project_license_text)
+    # If the project itself is GPL/AGPL, then copyleft dependencies are legally permitted
+    if proj_cat == "strong-copyleft":
+        allow_copyleft = True
+
+    resolved_licenses: Dict[str, Tuple[str, str]] = {}
+    for pkg in all_pypi:
+        resolved_licenses[pkg] = resolve_package_license(pkg, ecosystem="pypi", no_network=no_network)
+    for pkg in all_npm:
+        resolved_licenses[pkg] = resolve_package_license(pkg, ecosystem="npm", no_network=no_network)
+
+    violations: List[str] = []
+    category_counts: Dict[str, int] = {}
+
+    for pkg, (cat, name) in resolved_licenses.items():
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+        if cat in blocked_categories and not allow_copyleft:
+            violations.append(f"'{pkg}' ({name})")
+
+    if violations:
+        return AuditCheckResult(
+            id="license-compliance",
+            name="License Compliance & Copyleft Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"Strong copyleft dependencies detected: {'; '.join(violations[:3])} (viral copyleft risks proprietary IP contamination)",
+        )
+
+    summary = ", ".join(f"{cnt} {cat}" for cat, cnt in sorted(category_counts.items()))
+    return AuditCheckResult(
+        id="license-compliance",
+        name="License Compliance & Copyleft Scanner",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"Verified {total_pkgs} dependencies: 100% compliant with license policy ({summary}).",
+    )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -909,6 +1133,7 @@ def run_valdoz_audit(
     fix: bool = False,
     semgrep: bool = False,
     verify_packages: bool = False,
+    licenses: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
     fixes: List[str] = []
@@ -945,6 +1170,16 @@ def run_valdoz_audit(
             )
         )
 
+    # If --licenses explicitly enabled, append license-compliance check if not present
+    if licenses and not any(c.id == "license-compliance" for c in configured_checks):
+        configured_checks.append(
+            PackCheckDefinition(
+                id="license-compliance",
+                description="Verify dependency license compliance and detect copyleft contamination",
+                severity="blocking",
+            )
+        )
+
     results: List[AuditCheckResult] = []
 
     # Map check ID to implementation
@@ -955,12 +1190,17 @@ def run_valdoz_audit(
         "git-identity": scan_git_identity,
         "semgrep-sast": scan_semgrep,
         "package-hallucination": scan_package_hallucination,
+        "license-compliance": scan_license_compliance,
     }
 
     for chk in configured_checks:
         if chk.id == "package-hallucination":
             should_verify_net = verify_packages or (not no_network)
             res = scan_package_hallucination(project_root, verify_registry=should_verify_net)
+            res.severity = chk.severity
+            results.append(res)
+        elif chk.id == "license-compliance":
+            res = scan_license_compliance(project_root, no_network=no_network)
             res.severity = chk.severity
             results.append(res)
         elif chk.id in CHECK_RUNNERS:

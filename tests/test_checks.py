@@ -8,6 +8,8 @@ from valdoz.checks import (
     scan_undeclared_imports,
     scan_semgrep,
     scan_package_hallucination,
+    scan_license_compliance,
+    categorize_license,
     run_valdoz_audit,
 )
 from valdoz.state import ValdozState, save_state
@@ -299,6 +301,89 @@ dependencies = [
     assert any(c.id == "package-hallucination" for c in report.checks)
     pkg_chk = next(c for c in report.checks if c.id == "package-hallucination")
     assert pkg_chk.passed is True
+
+
+def test_categorize_license():
+    assert categorize_license("MIT License") == ("permissive", "MIT")
+    assert categorize_license("Apache 2.0") == ("permissive", "Apache-2.0")
+    assert categorize_license("BSD-3-Clause") == ("permissive", "BSD")
+    assert categorize_license("GPLv3") == ("strong-copyleft", "GPL")
+    assert categorize_license("AGPL-3.0") == ("strong-copyleft", "AGPL")
+    assert categorize_license("LGPL-2.1") == ("weak-copyleft", "LGPL")
+    assert categorize_license("MPL-2.0") == ("weak-copyleft", "MPL")
+    assert categorize_license("") == ("unknown", "Unknown")
+
+
+def test_license_compliance_clean_permissive(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+    "rich",
+]
+""")
+    res = scan_license_compliance(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "100% compliant with license policy" in res.message
+
+
+def test_license_compliance_strong_copyleft_detected(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+    "gpl-copyleft-package",
+]
+""")
+    from valdoz import checks
+
+    def mock_resolve(pkg, ecosystem="pypi", no_network=True):
+        if pkg == "gpl-copyleft-package":
+            return ("strong-copyleft", "GPL")
+        return ("permissive", "MIT")
+
+    monkeypatch.setattr(checks, "resolve_package_license", mock_resolve)
+
+    res = scan_license_compliance(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "Strong copyleft dependencies detected" in res.message
+    assert "gpl-copyleft-package" in res.message
+
+
+def test_license_compliance_copyleft_allowed_for_gpl_project(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "gpl-copyleft-package",
+]
+""")
+    # Set project LICENSE to GPL
+    (temp_project / "LICENSE").write_text("GNU GENERAL PUBLIC LICENSE Version 3")
+
+    from valdoz import checks
+    monkeypatch.setattr(checks, "resolve_package_license", lambda pkg, ecosystem="pypi", no_network=True: ("strong-copyleft", "GPL"))
+
+    res = scan_license_compliance(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+
+
+def test_run_valdoz_audit_with_licenses_flag(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+]
+""")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    report = run_valdoz_audit(temp_project, licenses=True)
+    assert any(c.id == "license-compliance" for c in report.checks)
+    lic_chk = next(c for c in report.checks if c.id == "license-compliance")
+    assert lic_chk.passed is True
+
 
 
 
