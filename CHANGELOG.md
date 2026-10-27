@@ -5,6 +5,22 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-10-27
+
+### Security Hardening & Bug Fixes
+- **MCP Error Guarding & Request Limits**:
+  - Replaced unguarded dictionary accesses on required arguments (`phase_num`, `human_token`, `username`, `token`) with safe lookups and explicit validation errors.
+  - Added a strict 1 MB per-line size limit to the MCP stdio protocol loop to prevent memory exhaustion DoS.
+  - Masked the credential store path returned by `valdoz_auth_setup` to relative `.valdoz/.git-credentials` to prevent internal filesystem disclosure.
+- **RFC 8785 UTF-8 Preservation**: Changed `canonical_json_bytes()` to `ensure_ascii=False`, preserving unescaped raw UTF-8 Arabic project names and text while maintaining cryptographic determinism.
+- **Diff Secrets Scrubbing**: Integrated `redact_secrets_in_text()` into `generate_semantic_diff_summary()` to prevent logging unredacted credentials to `.valdoz/history/semantic_diffs.jsonl`.
+- **Unified Diff Formatting for New Files**: Fixed `generate_patch_diff()` to produce standard `@@ -0,0 +1,N @@` hunk headers and `/dev/null` sources for newly created files.
+- **Path Traversal Defense in Failure Context**: Normalized candidate error trace paths with `.resolve()` and verified relative containment within `project_root`, rejecting traversal attempts (e.g. `../../../../etc/passwd.md`).
+- **Pack Supply-Chain Verification**: Connected `scan_prompt_injection_patterns()` and `verify_pack_integrity()` into `resolve_active_packs()`, preventing untrusted packs from loading if prompt injections or corrupted integrity maps are present.
+- **Dual-Metric Behavioral Budgets**: Expanded `check_behavioral_budget()` to independently validate both `file_writes` and `tool_calls`, and lowered the Phase 6 default file writes budget from 250 to 100.
+- **Self-Healing LLM Throttling**: Added exponential backoff (`2 ** (attempt - 1)` seconds) between retry attempts in `run_healing_loop()`.
+- **Webhook Error Sanitization**: Sanitized webhook failure messages to prevent leaking internal socket or filesystem details.
+
 ## [3.1.1] - 2026-10-27
 
 ### Second-Order Security Hardening (Adversary A1 & A3 Defenses)
