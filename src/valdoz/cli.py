@@ -885,8 +885,9 @@ def audit_cmd(
     verify_packages: bool = typer.Option(False, "--verify-packages", help="Query PyPI/npm live registries to detect AI-hallucinated and slopsquatted dependencies"),
     licenses: bool = typer.Option(False, "--licenses", help="Audit dependency licenses and check copyleft compliance"),
     contract: bool = typer.Option(False, "--contract", help="Validate OpenAPI contract spec and detect code-contract drift"),
+    containers: bool = typer.Option(False, "--containers", help="Audit Dockerfile and container compose infrastructure hardening"),
 ):
-    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination, license compliance, contract drift)."""
+    """Runs universal automated checks (secrets, lockfiles, imports, semgrep SAST, package hallucination, license compliance, contract drift, containers)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
@@ -899,6 +900,7 @@ def audit_cmd(
         verify_packages=verify_packages,
         licenses=licenses,
         contract=contract,
+        containers=containers,
     )
 
     if report.fixes_applied:

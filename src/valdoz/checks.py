@@ -1221,6 +1221,204 @@ def scan_api_contract_drift(project_root: Path) -> AuditCheckResult:
     )
 
 
+# ── Container & IaC Security Hardening Scanner ───────────────────────────────
+def find_container_manifests(project_root: Path) -> Dict[str, List[Path]]:
+    """Discovers all Dockerfiles and Compose files across the repository."""
+    manifests: Dict[str, List[Path]] = {"dockerfiles": [], "compose": []}
+    ignored_parts = {".git", ".venv", "venv", "node_modules", "site", "__pycache__", ".valdoz"}
+
+    for p in project_root.rglob("*"):
+        if not p.is_file():
+            continue
+        if any(part in p.parts for part in ignored_parts):
+            continue
+
+        name_lower = p.name.lower()
+        if name_lower == "dockerfile" or name_lower.startswith("dockerfile.") or name_lower.endswith(".dockerfile"):
+            manifests["dockerfiles"].append(p)
+        elif name_lower in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
+            manifests["compose"].append(p)
+
+    return manifests
+
+
+def audit_dockerfile_content(content: str) -> List[str]:
+    """Inspects Dockerfile instructions for root execution, floating tags, and supply-chain security issues."""
+    issues: List[str] = []
+    lines = content.splitlines()
+
+    instructions: List[Tuple[int, str, str]] = []
+    current_inst = ""
+    start_line = 1
+
+    for idx, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not current_inst:
+            start_line = idx
+        if line.endswith("\\"):
+            current_inst += line[:-1].strip() + " "
+        else:
+            current_inst += line
+            parts = current_inst.split(None, 1)
+            inst = parts[0].upper()
+            args = parts[1] if len(parts) > 1 else ""
+            instructions.append((start_line, inst, args))
+            current_inst = ""
+
+    last_user = "root"
+    for line_num, inst, args in instructions:
+        # 1. Base image pinning
+        if inst == "FROM":
+            base_img = args.split()[0]
+            if ":" not in base_img or base_img.endswith(":latest"):
+                issues.append(f"line {line_num}: Untagged or ':latest' base image '{base_img}' (pin specific version or sha256 digest)")
+
+        # 2. Track USER
+        elif inst == "USER":
+            last_user = args.strip().lower()
+
+        # 3. ADD vs COPY
+        elif inst == "ADD":
+            if not args.startswith(("http://", "https://")) and not any(args.endswith(ext) for ext in (".tar", ".tar.gz", ".tgz")):
+                issues.append(f"line {line_num}: Use 'COPY' instead of 'ADD' for local files")
+
+        # 4. RUN instructions
+        elif inst == "RUN":
+            args_lower = args.lower()
+            if "curl " in args_lower and ("| sh" in args_lower or "| bash" in args_lower):
+                issues.append(f"line {line_num}: Insecure piped shell execution ('curl | sh')")
+            if "apt-get install" in args_lower:
+                if "--no-install-recommends" not in args_lower:
+                    issues.append(f"line {line_num}: 'apt-get install' missing '--no-install-recommends'")
+                if "rm -rf /var/lib/apt/lists" not in args_lower:
+                    issues.append(f"line {line_num}: 'apt-get install' missing layer cleanup ('rm -rf /var/lib/apt/lists/*')")
+            if "pip install" in args_lower and "--no-cache-dir" not in args_lower:
+                issues.append(f"line {line_num}: 'pip install' missing '--no-cache-dir'")
+
+        # 5. Secrets in ENV/ARG
+        elif inst in ("ENV", "ARG"):
+            if re.search(r'\b(API_KEY|SECRET|PASSWORD|TOKEN|PRIVATE_KEY)\s*=\s*["\']?[a-zA-Z0-9_\-]{8,}', args, re.IGNORECASE):
+                issues.append(f"line {line_num}: Potential hardcoded secret in {inst} instruction")
+
+    if last_user in ("root", "0", ""):
+        issues.append("Missing non-root 'USER' instruction (container runs as root - CWE-250)")
+
+    return issues
+
+
+def audit_compose_content(content: str) -> List[str]:
+    """Inspects Docker Compose service specifications for dangerous host mounts and privileges."""
+    import yaml
+
+    issues: List[str] = []
+    try:
+        data = yaml.safe_load(content)
+    except Exception as e:
+        return [f"Invalid YAML syntax: {e}"]
+
+    if not isinstance(data, dict):
+        return ["Compose root must be an object"]
+
+    services = data.get("services", {})
+    if not isinstance(services, dict):
+        return []
+
+    for sname, scfg in services.items():
+        if not isinstance(scfg, dict):
+            continue
+
+        if scfg.get("privileged") is True:
+            issues.append(f"Service '{sname}': 'privileged: true' grants container full root capabilities on host kernel")
+
+        if scfg.get("network_mode") == "host":
+            issues.append(f"Service '{sname}': 'network_mode: host' bypasses container network isolation")
+
+        vols = scfg.get("volumes", [])
+        if isinstance(vols, list):
+            for v in vols:
+                v_str = str(v)
+                if "/var/run/docker.sock" in v_str:
+                    issues.append(f"Service '{sname}': Mounts '/var/run/docker.sock' (Docker socket exposure grants root host escalation)")
+                if v_str.startswith(("/:", "/etc:", "/root:")):
+                    issues.append(f"Service '{sname}': Mounts sensitive root or system directory ('{v_str}')")
+
+    return issues
+
+
+def scan_container_hardening(project_root: Path) -> AuditCheckResult:
+    """Verifies Dockerfiles and container compose files against security hardening best practices."""
+    import shutil
+
+    manifests = find_container_manifests(project_root)
+    dockerfiles = manifests["dockerfiles"]
+    compose_files = manifests["compose"]
+    total = len(dockerfiles) + len(compose_files)
+
+    if total == 0:
+        return AuditCheckResult(
+            id="container-hardening",
+            name="Container & IaC Security Hardening Scanner",
+            severity="blocking",
+            status="skipped",
+            passed=True,
+            message="No Dockerfile or container compose manifests detected (check skipped).",
+        )
+
+    all_issues: List[str] = []
+    hadolint_bin = shutil.which("hadolint")
+
+    for df in dockerfiles:
+        rel_path = df.relative_to(project_root)
+        if hadolint_bin:
+            try:
+                res = subprocess.run(
+                    [hadolint_bin, "-f", "json", str(df)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.stdout.strip():
+                    entries = json.loads(res.stdout)
+                    for e in entries:
+                        if e.get("level") in ("error", "warning"):
+                            all_issues.append(f"{rel_path}:{e.get('line')} ({e.get('code')}: {e.get('message')})")
+            except Exception:
+                text = df.read_text(encoding="utf-8", errors="ignore")
+                for iss in audit_dockerfile_content(text):
+                    all_issues.append(f"{rel_path}: {iss}")
+        else:
+            text = df.read_text(encoding="utf-8", errors="ignore")
+            for iss in audit_dockerfile_content(text):
+                all_issues.append(f"{rel_path}: {iss}")
+
+    for cf in compose_files:
+        rel_path = cf.relative_to(project_root)
+        text = cf.read_text(encoding="utf-8", errors="ignore")
+        for iss in audit_compose_content(text):
+            all_issues.append(f"{rel_path}: {iss}")
+
+    if all_issues:
+        return AuditCheckResult(
+            id="container-hardening",
+            name="Container & IaC Security Hardening Scanner",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"{len(all_issues)} container security issue(s) detected: {'; '.join(all_issues[:3])}",
+        )
+
+    return AuditCheckResult(
+        id="container-hardening",
+        name="Container & IaC Security Hardening Scanner",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"All {total} container manifests verified secure and hardened (non-root USER, pinned base tags, safe volumes).",
+    )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -1374,6 +1572,7 @@ def run_valdoz_audit(
     verify_packages: bool = False,
     licenses: bool = False,
     contract: bool = False,
+    containers: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
     fixes: List[str] = []
@@ -1430,6 +1629,16 @@ def run_valdoz_audit(
             )
         )
 
+    # If --containers explicitly enabled, append container-hardening check if not present
+    if containers and not any(c.id in ("container-hardening", "iac-hardening") for c in configured_checks):
+        configured_checks.append(
+            PackCheckDefinition(
+                id="container-hardening",
+                description="Verify Dockerfile and container compose security hardening",
+                severity="blocking",
+            )
+        )
+
     results: List[AuditCheckResult] = []
 
     # Map check ID to implementation
@@ -1443,6 +1652,8 @@ def run_valdoz_audit(
         "license-compliance": scan_license_compliance,
         "api-contract-check": scan_api_contract_drift,
         "api-contract-drift": scan_api_contract_drift,
+        "container-hardening": scan_container_hardening,
+        "iac-hardening": scan_container_hardening,
     }
 
     for chk in configured_checks:
@@ -1457,6 +1668,10 @@ def run_valdoz_audit(
             results.append(res)
         elif chk.id in ("api-contract-check", "api-contract-drift"):
             res = scan_api_contract_drift(project_root)
+            res.severity = chk.severity
+            results.append(res)
+        elif chk.id in ("container-hardening", "iac-hardening"):
+            res = scan_container_hardening(project_root)
             res.severity = chk.severity
             results.append(res)
         elif chk.id in CHECK_RUNNERS:

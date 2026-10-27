@@ -72,6 +72,11 @@ VALDOZ_TOOLS = [
                     "description": "Validate OpenAPI contract spec and detect route/schema drift.",
                     "default": False,
                 },
+                "containers": {
+                    "type": "boolean",
+                    "description": "Audit Dockerfile and container compose infrastructure security hardening.",
+                    "default": False,
+                },
             },
         },
     },
@@ -237,6 +242,7 @@ def handle_run_audit(
     verify_packages: bool = False,
     licenses: bool = False,
     contract: bool = False,
+    containers: bool = False,
 ) -> Dict[str, Any]:
     report = run_valdoz_audit(
         root,
@@ -246,6 +252,7 @@ def handle_run_audit(
         verify_packages=verify_packages,
         licenses=licenses,
         contract=contract,
+        containers=containers,
     )
     blocking_cnt = sum(1 for c in report.checks if c.severity == "blocking" and not c.passed)
     warning_cnt = sum(1 for c in report.checks if c.severity == "warning" and not c.passed)
@@ -436,6 +443,7 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             verify_packages=arguments.get("verify_packages", False),
             licenses=arguments.get("licenses", False),
             contract=arguments.get("contract", False),
+            containers=arguments.get("containers", False),
         )
     elif tool_name == "valdoz_check_gates":
         return handle_check_gates(root, phase_num=arguments.get("phase_num"))

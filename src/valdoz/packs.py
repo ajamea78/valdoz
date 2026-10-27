@@ -99,12 +99,13 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
         id="security",
         version="1.0.0",
         name="Security & Vulnerability Hardening Pack",
-        description="Deterministic AST static analysis (Semgrep), package hallucination / slopsquatting detection, license copyleft compliance, and deep SAST verification.",
+        description="Deterministic AST static analysis (Semgrep), package hallucination detection, license copyleft compliance, container/IaC hardening, and deep SAST verification.",
         extends=["base"],
         checks=[
             PackCheckDefinition(id="semgrep-sast", description="Semgrep deterministic AST vulnerability scanner", severity="blocking"),
             PackCheckDefinition(id="package-hallucination", description="Detect AI-hallucinated and slopsquatted packages", severity="blocking"),
             PackCheckDefinition(id="license-compliance", description="Verify dependency license compliance and detect copyleft contamination", severity="blocking"),
+            PackCheckDefinition(id="container-hardening", description="Verify Dockerfile and container compose security hardening", severity="blocking"),
         ],
     ),
 }
