@@ -38,7 +38,7 @@ VALDOZ_TOOLS = [
     },
     {
         "name": "valdoz_run_audit",
-        "description": "Run universal code hygiene audit across the repo (secrets, lockfiles, imports) and optionally auto-remediate.",
+        "description": "Run universal code hygiene audit across the repo (secrets, lockfiles, imports, semgrep SAST) and optionally auto-remediate.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -50,6 +50,11 @@ VALDOZ_TOOLS = [
                 "strict": {
                     "type": "boolean",
                     "description": "Treat warnings as blocking failures.",
+                    "default": False,
+                },
+                "semgrep": {
+                    "type": "boolean",
+                    "description": "Run Semgrep deterministic AST Static Application Security Testing (SAST).",
                     "default": False,
                 },
             },
@@ -209,8 +214,8 @@ def handle_get_status(root: Path) -> Dict[str, Any]:
     }
 
 
-def handle_run_audit(root: Path, fix: bool = False, strict: bool = False) -> Dict[str, Any]:
-    report = run_valdoz_audit(root, fix=fix, strict=strict)
+def handle_run_audit(root: Path, fix: bool = False, strict: bool = False, semgrep: bool = False) -> Dict[str, Any]:
+    report = run_valdoz_audit(root, fix=fix, strict=strict, semgrep=semgrep)
     blocking_cnt = sum(1 for c in report.checks if c.severity == "blocking" and not c.passed)
     warning_cnt = sum(1 for c in report.checks if c.severity == "warning" and not c.passed)
     return {
@@ -392,7 +397,12 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
     if tool_name == "valdoz_get_status":
         return handle_get_status(root)
     elif tool_name == "valdoz_run_audit":
-        return handle_run_audit(root, fix=arguments.get("fix", False), strict=arguments.get("strict", False))
+        return handle_run_audit(
+            root,
+            fix=arguments.get("fix", False),
+            strict=arguments.get("strict", False),
+            semgrep=arguments.get("semgrep", False),
+        )
     elif tool_name == "valdoz_check_gates":
         return handle_check_gates(root, phase_num=arguments.get("phase_num"))
     elif tool_name == "valdoz_slice_ops":
