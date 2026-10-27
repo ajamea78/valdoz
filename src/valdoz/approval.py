@@ -96,10 +96,10 @@ def get_approval_secret(project_root: Optional[Path] = None) -> bytes:
     new_sec = secrets.token_bytes(32)
     try:
         user_key.parent.mkdir(parents=True, exist_ok=True)
-        # Directory 0o700, key file 0o600
-        os.chmod(user_key.parent, 0o700)
+        # Directory 0o700 (user-only traversal), key file 0o600
+        os.chmod(user_key.parent, 0o700)  # nosemgrep # nosec
         user_key.write_bytes(new_sec)
-        os.chmod(user_key, 0o600)
+        os.chmod(user_key, 0o600)  # nosemgrep # nosec
         return new_sec
     except Exception:
         # Fallback to in-workspace if home directory is read-only
