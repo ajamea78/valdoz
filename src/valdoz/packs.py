@@ -95,6 +95,16 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
             PackCheckDefinition(id="undeclared-imports", description="Verify backend imports exist in manifest", severity="blocking"),
         ],
     ),
+    "security": PackManifest(
+        id="security",
+        version="1.0.0",
+        name="Security & Vulnerability Hardening Pack",
+        description="Deterministic AST static analysis (Semgrep), OWASP Top 10 auditing, and deep SAST verification.",
+        extends=["base"],
+        checks=[
+            PackCheckDefinition(id="semgrep-sast", description="Semgrep deterministic AST vulnerability scanner", severity="blocking"),
+        ],
+    ),
 }
 
 

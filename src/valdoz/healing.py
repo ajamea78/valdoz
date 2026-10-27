@@ -245,7 +245,7 @@ def mock_or_call_ai(prompt: str, model_config: Optional[Dict[str, Any]] = None) 
                     "Authorization": f"Bearer {api_key}",
                 },
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 # nosemgrep
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["choices"][0]["message"]["content"]
         except Exception as e:

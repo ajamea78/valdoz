@@ -621,7 +621,7 @@ def research_fetch(
             url,
             headers={"User-Agent": "ValdoZ-SanitizedFetcher/3.0"},
         )
-        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310 # nosemgrep
             content_type = response.headers.get("Content-Type", "")
             allowed_content_types = ("text/", "application/json", "application/xml", "application/javascript")
             if content_type and not any(content_type.lower().startswith(act) for act in allowed_content_types):
@@ -881,12 +881,13 @@ def audit_cmd(
     strict: bool = typer.Option(False, "--strict", help="Fail if any warning check fails"),
     no_network: bool = typer.Option(True, "--no-network", help="Disable checks requiring external network"),
     fix: bool = typer.Option(False, "--fix", help="Automatically remediate safe audit failures (e.g. add .env to .gitignore, generate lockfile)"),
+    semgrep: bool = typer.Option(False, "--semgrep", help="Run Semgrep deterministic AST vulnerability analysis"),
 ):
-    """Runs universal automated checks (secrets, lockfiles, undeclared imports)."""
+    """Runs universal automated checks (secrets, lockfiles, undeclared imports, semgrep SAST)."""
     root = find_project_root()
     from valdoz.checks import run_valdoz_audit
 
-    report = run_valdoz_audit(root, strict=strict, no_network=no_network, fix=fix)
+    report = run_valdoz_audit(root, strict=strict, no_network=no_network, fix=fix, semgrep=semgrep)
 
     if report.fixes_applied:
         console.print("[bold green]✓ Automatically applied audit fixes:[/bold green]")

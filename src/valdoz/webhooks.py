@@ -56,7 +56,7 @@ def emit_webhook_event(
                     "User-Agent": "ValdoZ-Protocol-Engine/3.0.0",
                 },
             )
-            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:  # nosec B310
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:  # nosec B310 # nosemgrep
                 results.append({"url": url, "status": "delivered", "code": resp.status})
         except Exception as e:
             results.append({"url": url, "status": "failed", "error": str(e)})

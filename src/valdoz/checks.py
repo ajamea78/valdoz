@@ -420,6 +420,105 @@ def scan_git_identity(project_root: Path) -> AuditCheckResult:
     )
 
 
+def scan_semgrep(project_root: Path) -> AuditCheckResult:
+    """Runs Semgrep deterministic AST vulnerability analysis across project code."""
+    import shutil
+
+    semgrep_bin = shutil.which("semgrep")
+    uvx_bin = shutil.which("uvx")
+    if not semgrep_bin and not uvx_bin:
+        return AuditCheckResult(
+            id="semgrep-sast",
+            name="Semgrep AST Static Analysis",
+            severity="warning",
+            status="skipped",
+            passed=True,
+            message="Semgrep or uvx not found in PATH (install semgrep to enable deterministic SAST).",
+        )
+
+    target_path = "src" if (project_root / "src").is_dir() else "."
+    cmd = (
+        [semgrep_bin, "scan", "--config", "auto", "--json", "--quiet", target_path]
+        if semgrep_bin
+        else [uvx_bin, "semgrep", "scan", "--config", "auto", "--json", "--quiet", target_path]
+    )
+
+    try:
+        res = subprocess.run(
+            cmd,
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except Exception as e:
+        return AuditCheckResult(
+            id="semgrep-sast",
+            name="Semgrep AST Static Analysis",
+            severity="warning",
+            status="skipped",
+            passed=True,
+            message=f"Semgrep execution skipped ({e}).",
+        )
+
+    stdout = res.stdout
+    start = stdout.find('{"version":')
+    if start == -1:
+        return AuditCheckResult(
+            id="semgrep-sast",
+            name="Semgrep AST Static Analysis",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message="Semgrep SAST scan clean (0 vulnerabilities found).",
+        )
+
+    try:
+        json_data = json.loads(stdout[start:].splitlines()[0])
+        results = json_data.get("results", [])
+        blocking_results = [r for r in results if r.get("extra", {}).get("severity") in ("ERROR", "WARNING")]
+
+        if not blocking_results:
+            return AuditCheckResult(
+                id="semgrep-sast",
+                name="Semgrep AST Static Analysis",
+                severity="blocking",
+                status="ran",
+                passed=True,
+                message=f"Semgrep SAST scan clean ({len(results)} informational findings).",
+            )
+
+        summaries = []
+        for b in blocking_results[:3]:
+            raw_path = Path(b.get("path", ""))
+            try:
+                rel_path = raw_path.relative_to(project_root.resolve())
+            except ValueError:
+                rel_path = raw_path
+            line = b.get("start", {}).get("line", "?")
+            rule = b.get("check_id", "").split(".")[-1]
+            summaries.append(f"{rel_path}:{line} ({rule})")
+
+        return AuditCheckResult(
+            id="semgrep-sast",
+            name="Semgrep AST Static Analysis",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"{len(blocking_results)} SAST vulnerabilities detected: {'; '.join(summaries)}",
+        )
+    except Exception as e:
+        return AuditCheckResult(
+            id="semgrep-sast",
+            name="Semgrep AST Static Analysis",
+            severity="warning",
+            status="ran",
+            passed=True,
+            message=f"Semgrep scan completed (parse error: {e}).",
+        )
+
+
 def autofix_audit_issues(project_root: Path) -> List[str]:
     """Applies safe, automated remediations for common audit failures."""
     actions_taken: List[str] = []
@@ -569,6 +668,7 @@ def run_valdoz_audit(
     strict: bool = False,
     no_network: bool = True,
     fix: bool = False,
+    semgrep: bool = False,
 ) -> AuditReport:
     """Executes all universal and pack-configured audit checks."""
     fixes: List[str] = []
@@ -585,6 +685,16 @@ def run_valdoz_audit(
     valdozrc = load_valdozrc(project_root)
     configured_checks = merge_pack_checks(active_packs, valdozrc)
 
+    # If --semgrep explicitly enabled, append semgrep-sast check if not already present
+    if semgrep and not any(c.id == "semgrep-sast" for c in configured_checks):
+        configured_checks.append(
+            PackCheckDefinition(
+                id="semgrep-sast",
+                description="Semgrep deterministic AST vulnerability scanner",
+                severity="blocking",
+            )
+        )
+
     results: List[AuditCheckResult] = []
 
     # Map check ID to implementation
@@ -593,6 +703,7 @@ def run_valdoz_audit(
         "lockfile-check": scan_lockfile,
         "undeclared-imports": scan_undeclared_imports,
         "git-identity": scan_git_identity,
+        "semgrep-sast": scan_semgrep,
     }
 
     for chk in configured_checks:

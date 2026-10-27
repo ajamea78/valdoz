@@ -6,6 +6,7 @@ from valdoz.checks import (
     scan_secrets,
     scan_lockfile,
     scan_undeclared_imports,
+    scan_semgrep,
     run_valdoz_audit,
 )
 from valdoz.state import ValdozState, save_state
@@ -120,4 +121,84 @@ def test_autofix_audit_issues(temp_project: Path):
     assert any("Added '.env' to .gitignore" in fix for fix in report_after.fixes_applied)
     assert (temp_project / ".gitignore").exists()
     assert ".env" in (temp_project / ".gitignore").read_text()
+
+
+def test_scan_semgrep_missing_bin(temp_project: Path, monkeypatch):
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    res = scan_semgrep(temp_project)
+    assert res.status == "skipped"
+    assert res.passed is True
+    assert "not found in PATH" in res.message
+
+
+def test_scan_semgrep_clean(temp_project: Path, monkeypatch):
+    import shutil
+    import subprocess
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/semgrep" if cmd == "semgrep" else None)
+
+    class MockProcess:
+        stdout = '{"version": "1.0.0", "results": []}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: MockProcess())
+    res = scan_semgrep(temp_project)
+    assert res.status == "ran"
+    assert res.passed is True
+    assert "Semgrep SAST scan clean" in res.message
+
+
+def test_scan_semgrep_findings(temp_project: Path, monkeypatch):
+    import shutil
+    import subprocess
+    import json
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/semgrep" if cmd == "semgrep" else None)
+
+    findings = {
+        "version": "1.0.0",
+        "results": [
+            {
+                "check_id": "rules.python.security.sql_injection",
+                "path": "src/db.py",
+                "start": {"line": 42},
+                "extra": {
+                    "severity": "ERROR",
+                    "message": "Potential SQL injection vulnerability",
+                },
+            }
+        ],
+    }
+
+    class MockProcess:
+        stdout = json.dumps(findings)
+        stderr = ""
+        returncode = 1
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: MockProcess())
+    res = scan_semgrep(temp_project)
+    assert res.status == "ran"
+    assert res.passed is False
+    assert "1 SAST vulnerabilities detected" in res.message
+    assert "sql_injection" in res.message
+
+
+def test_run_valdoz_audit_with_semgrep_flag(temp_project: Path, monkeypatch):
+    (temp_project / "pyproject.toml").write_text("[project]\nname='ok'\ndependencies=['pydantic']\n")
+    (temp_project / "uv.lock").write_text("# lock\n")
+
+    import shutil
+    import subprocess
+    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/semgrep" if cmd == "semgrep" else None)
+
+    class MockProcess:
+        stdout = '{"version": "1.0.0", "results": []}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: MockProcess())
+
+    report = run_valdoz_audit(temp_project, semgrep=True)
+    assert any(c.id == "semgrep-sast" for c in report.checks)
+
 
