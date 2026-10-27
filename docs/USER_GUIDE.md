@@ -439,13 +439,18 @@ ValdoZ automatically checks:
 - **Undeclared Imports**: Scans Python and JavaScript files to verify that all imported modules are declared in your package manifests (`pyproject.toml`, `package.json`).
 - **Git Identity Isolation**: Checks local git config (`user.email`, `user.name`, `credential.useHttpPath`) and project vault isolation to prevent accidental cross-account token leaks.
 - **Semgrep AST Static Analysis (`--semgrep`)**: Runs deterministic semantic AST code security scanning across the project to catch injection vulnerabilities, path traversal, dangerous imports, and insecure API usage.
+- **Package Hallucination & Slopsquatting (`--verify-packages`)**: Protects against AI supply-chain attacks by detecting non-existent hallucinated package names and typosquatting/slopsquatting mutations before malicious packages can be installed.
 
-### Running Semgrep SAST Vulnerability Analysis
+### Running Semgrep SAST & Package Registry Verification
 To trigger AST static security analysis with Semgrep during an audit:
 ```bash
 valdoz audit --semgrep
 ```
-Or permanently enable the `security` pack so Semgrep SAST runs automatically on gate checks:
+To verify all declared dependencies against PyPI/npm live registries and block AI hallucinations:
+```bash
+valdoz audit --verify-packages
+```
+Or permanently enable the `security` pack so both Semgrep SAST and package hallucination scanning run automatically on gate checks:
 ```bash
 valdoz pack add security
 ```
