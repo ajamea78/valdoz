@@ -654,7 +654,7 @@ def verify_registry_package_existence(pkg_name: str, ecosystem: str = "pypi", ti
         method="HEAD",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosemgrep
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosemgrep # nosec B310
             return resp.status == 200, "Found"
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -894,7 +894,7 @@ def resolve_package_license(pkg_name: str, ecosystem: str = "pypi", no_network: 
             else:
                 url = f"https://registry.npmjs.org/{urllib.parse.quote(norm, safe='@')}"
             req = urllib.request.Request(url, headers={"User-Agent": "valdoz-protocol/3.0.0"})
-            with urllib.request.urlopen(req, timeout=3.5) as r:  # nosemgrep
+            with urllib.request.urlopen(req, timeout=3.5) as r:  # nosemgrep # nosec B310
                 data = json.loads(r.read())
                 info = data.get("info", {})
                 raw = info.get("license") or info.get("license_expression") or ""
