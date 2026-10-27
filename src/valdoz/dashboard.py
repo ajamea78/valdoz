@@ -27,37 +27,86 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
     curr_phase = state.current_phase
     slices = list_slices(root)
 
-    # Build phase items JSON
-    phase_data = []
+    # Build phase items
+    phase_cards = []
     for i in range(11):
         name = PHASE_NAMES.get(i, f"Phase {i}")
         p_state = state.phases.get(str(i))
         status = p_state.status if p_state else "not_started"
-        deliverables = PHASE_DELIVERABLES.get(i, [])
-        deliv_info = []
-        for d in deliverables:
-            deliv_info.append({
-                "path": d,
-                "exists": (root / d).exists(),
-            })
-        phase_data.append({
-            "number": i,
-            "name": name,
-            "status": status,
-            "is_current": (i == curr_phase),
-            "deliverables": deliv_info,
-            "whitelist": PHASE_COMMAND_WHITELISTS.get(i, []),
-        })
+        is_curr = (i == curr_phase)
 
-    slice_data = [
-        {
-            "id": s.slice_id,
-            "status": s.status,
-            "tests_passed": s.tests_passed,
-            "coverage_delta": s.coverage_delta,
-        }
-        for s in slices
-    ]
+        if is_curr:
+            card_cls = "border-[var(--primary)] bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]"
+            num_color = "text-[var(--primary)]"
+            badge = "● ACTIVE"
+        elif status == "approved":
+            card_cls = "border-emerald-500/40 bg-emerald-950/20"
+            num_color = "text-emerald-400"
+            badge = "✓ DONE"
+        else:
+            card_cls = "border-[var(--border)] bg-[var(--card)] opacity-60"
+            num_color = "text-[var(--muted-foreground)]"
+            badge = "WAITING"
+
+        phase_cards.append(
+            f'<div class="p-3 rounded-lg border text-xs flex flex-col justify-between {card_cls}">'
+            f'<div class="flex items-center justify-between mb-1">'
+            f'<span class="font-mono font-bold text-xs {num_color}">P{i}</span>'
+            f'<span class="text-[11px] uppercase tracking-wider">{badge}</span>'
+            f'</div>'
+            f'<div class="font-semibold truncate text-white">{html.escape(name)}</div>'
+            f'</div>'
+        )
+
+    # Build deliverables list for active phase
+    active_deliverables = PHASE_DELIVERABLES.get(curr_phase, [])
+    deliv_rows = []
+    for d in active_deliverables:
+        exists = (root / d).exists()
+        icon = "✓" if exists else "✗"
+        path_color = "text-white" if exists else "text-[var(--muted-foreground)]"
+        badge_cls = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" if exists else "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+        badge_txt = "READY" if exists else "MISSING"
+
+        deliv_rows.append(
+            f'<div class="py-2.5 flex items-center justify-between text-xs">'
+            f'<div class="flex items-center gap-2">'
+            f'<span class="font-mono text-sm">{icon}</span>'
+            f'<span class="font-mono {path_color}">{html.escape(d)}</span>'
+            f'</div>'
+            f'<span class="px-2 py-0.5 rounded text-[11px] {badge_cls}">{badge_txt}</span>'
+            f'</div>'
+        )
+
+    deliv_content = "".join(deliv_rows) if deliv_rows else '<div class="text-xs text-[var(--muted-foreground)] py-2">No static deliverable requirements for this phase.</div>'
+
+    # Build slices block
+    slices_section = ""
+    if curr_phase == 6 or slices:
+        slice_cards = []
+        for s in slices:
+            test_lbl = "✓ Passing" if s.tests_passed else "✗ Not Run"
+            slice_cards.append(
+                f'<div class="p-3 rounded-lg border border-[var(--border)] bg-zinc-900/40 text-xs space-y-1">'
+                f'<div class="flex items-center justify-between font-mono">'
+                f'<span class="font-bold text-white">{html.escape(s.slice_id)}</span>'
+                f'<span class="uppercase text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">{html.escape(s.status)}</span>'
+                f'</div>'
+                f'<div class="text-[11px] text-[var(--muted-foreground)]">Tests: {test_lbl}</div>'
+                f'</div>'
+            )
+        slices_content = "".join(slice_cards) if slice_cards else '<div class="text-xs text-[var(--muted-foreground)] col-span-3">No slices registered yet.</div>'
+        slices_section = (
+            f'<div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">'
+            f'<h3 class="text-sm font-semibold text-white tracking-wide uppercase">Phase 6 Build Slices</h3>'
+            f'<div class="grid grid-cols-1 md:grid-cols-3 gap-3">{slices_content}</div>'
+            f'</div>'
+        )
+
+    cards_html = "".join(phase_cards)
+    phase_title = html.escape(PHASE_NAMES.get(curr_phase, "Unknown"))
+    proj_name = html.escape(state.project_name)
+    lang_name = html.escape(state.language).upper()
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -89,35 +138,19 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
         <div class="flex items-center gap-3">
           <span class="text-2xl font-black tracking-tight text-[var(--primary)]">VALDOZ</span>
           <span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">LIVE ENGINE</span>
-          <span class="text-xs text-[var(--muted-foreground)]">v3.0.0</span>
+          <span class="text-xs text-[var(--muted-foreground)]">v3.1.0</span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mt-1">Project: <span class="font-mono text-white">{html.escape(state.project_name)}</span> &bull; Client Lang: <span class="uppercase font-mono">{html.escape(state.language)}</span></p>
+        <p class="text-xs text-[var(--muted-foreground)] mt-1">Project: <span class="font-mono text-white">{proj_name}</span> &bull; Client Lang: <span class="font-mono">{lang_name}</span></p>
       </div>
       <div class="text-right">
         <span class="text-xs text-[var(--muted-foreground)]">Current Focus</span>
-        <div class="text-lg font-bold text-white">Phase {curr_phase}: {html.escape(PHASE_NAMES.get(curr_phase, 'Unknown'))}</div>
+        <div class="text-lg font-bold text-white">Phase {curr_phase}: {phase_title}</div>
       </div>
     </div>
 
     <!-- Stepper Grid -->
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-      {"".join(f'''
-      <div class="p-3 rounded-lg border text-xs flex flex-col justify-between {
-          "border-[var(--primary)] bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]" if p["is_current"]
-          else "border-emerald-500/40 bg-emerald-950/20" if p["status"] == "approved"
-          else "border-[var(--border)] bg-[var(--card)] opacity-60"
-      }">
-        <div class="flex items-center justify-between mb-1">
-          <span class="font-mono font-bold text-xs {'text-[var(--primary)]' if p['is_current'] else 'text-emerald-400' if p['status'] == 'approved' else 'text-[var(--muted-foreground)]'}">P{p['number']}</span>
-          <span class="text-[11px] uppercase tracking-wider">{
-              '● ACTIVE' if p['is_current']
-              else '✓ DONE' if p['status'] == 'approved'
-              else 'WAITING'
-          }</span>
-        </div>
-        <div class="font-semibold truncate text-white">{html.escape(p['name'])}</div>
-      </div>
-      ''' for p in phase_data)}
+      {cards_html}
     </div>
 
     <!-- Current Phase Details Card -->
@@ -128,38 +161,12 @@ def generate_dashboard_html(project_root: Optional[Path] = None) -> str:
       </div>
 
       <div class="divide-y divide-[var(--border)]">
-        {"".join(f'''
-        <div class="py-2.5 flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2">
-            <span class="font-mono text-sm">{ "✓" if d["exists"] else "✗" }</span>
-            <span class="font-mono { "text-white" if d["exists"] else "text-[var(--muted-foreground)]" }">{html.escape(d["path"])}</span>
-          </div>
-          <span class="px-2 py-0.5 rounded text-[11px] {
-              "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" if d["exists"]
-              else "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-          }">{ "READY" if d["exists"] else "MISSING" }</span>
-        </div>
-        ''' for d in phase_data[curr_phase]["deliverables"]) or '<div class="text-xs text-[var(--muted-foreground)] py-2">No static deliverable requirements for this phase.</div>'}
+        {deliv_content}
       </div>
     </div>
 
-    <!-- Phase 6 Slices (if any) -->
-    {f'''
-    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-      <h3 class="text-sm font-semibold text-white tracking-wide uppercase">Phase 6 Build Slices</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {"".join(f"""
-        <div class="p-3 rounded-lg border border-[var(--border)] bg-zinc-900/40 text-xs space-y-1">
-          <div class="flex items-center justify-between font-mono">
-            <span class="font-bold text-white">{html.escape(s["id"])}</span>
-            <span class="uppercase text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">{html.escape(s["status"])}</span>
-          </div>
-          <div class="text-[11px] text-[var(--muted-foreground)]">Tests: {'✓ Passing' if s['tests_passed'] else '✗ Not Run'}</div>
-        </div>
-        """ for s in slice_data) or '<div class="text-xs text-[var(--muted-foreground)] col-span-3">No slices registered yet.</div>'}
-      </div>
-    </div>
-    ''' if curr_phase == 6 or slice_data else ''}
+    <!-- Phase 6 Slices -->
+    {slices_section}
 
     <!-- Protocol Guidance -->
     <div class="p-4 rounded-xl border border-blue-500/20 bg-blue-950/20 text-xs text-blue-200 flex items-center justify-between">

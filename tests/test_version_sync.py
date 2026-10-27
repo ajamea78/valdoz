@@ -2,7 +2,6 @@
 
 import re
 from pathlib import Path
-import tomllib
 
 from valdoz import __version__
 
@@ -12,10 +11,10 @@ def test_version_matches_pyproject():
     pyproject_path = root / "pyproject.toml"
     assert pyproject_path.exists(), "pyproject.toml not found"
 
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-
-    pyproject_version = data["project"]["version"]
+    content = pyproject_path.read_text(encoding="utf-8")
+    match = re.search(r'version\s*=\s*"([^"]+)"', content)
+    assert match is not None, "Could not find version in pyproject.toml"
+    pyproject_version = match.group(1)
     assert __version__ == pyproject_version, (
         f"Version mismatch: __version__ is '{__version__}' but pyproject.toml is '{pyproject_version}'"
     )
