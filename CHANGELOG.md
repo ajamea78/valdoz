@@ -5,6 +5,17 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-10-27
+
+### Second-Order Security Hardening (Adversary A1 & A3 Defenses)
+- **Deliverables-Bound Approval Tokens (`valdoz-v2`)**: Embedded deterministic SHA-256 composite hash of deliverables into token signature (`SHA256(action || target || deliverables_hash || ts || nonce)`), eliminating Time-of-Check to Time-of-Use (TOCTOU) file alteration races.
+- **Out-of-Workspace Keystore Resolution**: Master secret resolution prioritizes `VALDOZ_APPROVAL_SECRET` and user OS configuration directory (`~/.config/valdoz/keys/approval.key` with `0700`/`0600` permissions), isolating credentials outside the workspace boundary to defend against in-workspace code execution.
+- **Single-Use Nonce Burn & Replay Defense**: Consumed approval token nonces are recorded in `.valdoz/consumed_nonces.json` with automatic 15-minute pruning, preventing token replay attacks within TTL windows.
+- **RFC 8785 Canonical JSON Audit Log Hash Chaining**: Formatted all `.valdoz/approvals.log` hash-chain payloads into strict canonical JSON (deterministic lexicographical sorting, compact delimiters) to eliminate delimiter collision attacks.
+- **State Repair Laundering Defense**: Strengthened `valdoz state repair` to require unbroken cryptographic ledger proofs and assert that disk deliverables match recorded approval hashes before restoring `approved` phase states.
+- **LLM Secret Scrubbing Pipeline**: Automated redaction of API keys (OpenAI, Anthropic, Gemini, AWS), personal access tokens (GitHub), private keys, Bearer headers, and ValdoZ tokens before sending error traces, diffs, or specifications to AI self-healing diagnostic prompts.
+- **Pack & Skill Supply-Chain Integrity**: Added automated prompt injection scanners detecting instruction overrides, jailbreaks, hidden comments, and shell pipes in imported agent skills. Generated SHA-256 integrity maps in `manifest.yaml` and verified with `verify_pack_integrity`.
+
 ## [3.1.0] - 2026-10-26
 
 ### Security Hardening
