@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.2] - 2026-10-27
 
 ### Security Hardening & Bug Fixes
+- **Automated Documentation Enforcement (Rule 11 & `doc-sync`)**:
+  - Implemented `scan_doc_sync()` audit check in `src/valdoz/checks.py` and registered it in the `base` pack to mechanically block un-synchronized code releases.
+  - Added Rule 11 ("Atomic Documentation Reflex") across core runtime configurations (`sync.py`, `AGENTS.md`, `GEMINI.md`, `.agent/rules/03-doc-sync.md`), mandating automatic transition to the `scribe` role in the same session to record functional deltas.
+  - Added automated scaffolding of baseline `CHANGELOG.md` in `valdoz audit --fix` and `valdoz project init`.
 - **MCP Error Guarding & Request Limits**:
   - Replaced unguarded dictionary accesses on required arguments (`phase_num`, `human_token`, `username`, `token`) with safe lookups and explicit validation errors.
   - Added a strict 1 MB per-line size limit to the MCP stdio protocol loop to prevent memory exhaustion DoS.

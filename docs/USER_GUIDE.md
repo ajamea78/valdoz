@@ -292,6 +292,12 @@ valdoz session start --role scribe
 ```
 ValdoZ locks `.valdoz/session.lock`. Two builders cannot conflict on the same repo, and git commits that violate role domains are blocked by the pre-commit hook.
 
+### The Atomic Documentation Reflex (Rule 11)
+To ensure documentation never falls out of sync with code changes, ValdoZ enforces **Rule 11 (Atomic Documentation Reflex)**:
+- Whenever a code update, bug fix, security patch, API change, or feature is completed by the `builder` role, the agent automatically transitions to the `scribe` role in the same session.
+- The `scribe` documents all functional deltas and version updates in `CHANGELOG.md` (and updates `docs/USER_GUIDE.md` / `README.md` if applicable) before declaring work complete or requesting human approval.
+- You never need to remind the agent to write documentation; the reflex is baked into the agent's core directives and mechanically enforced by the `doc-sync` audit check.
+
 ---
 
 ## 4. The 11 Lifecycle Phases (Phase 0-10 Cheat Sheet)
@@ -436,6 +442,7 @@ valdoz audit
 ValdoZ automatically checks:
 - **Secrets Scan**: Scans for hardcoded AWS keys, OpenAI keys, private keys, and `.env` files (distinguishes safely gitignored local files from exposed files).
 - **Lockfile Check**: Verifies that `package-lock.json`, `uv.lock`, etc. are committed and dependencies are pinned.
+- **Documentation & Changelog Sync (`doc-sync`)**: Enforces presence of `CHANGELOG.md` and verifies that active project version headers match `pyproject.toml`, preventing undocumented code releases.
 - **Undeclared Imports**: Scans Python and JavaScript files to verify that all imported modules are declared in your package manifests (`pyproject.toml`, `package.json`).
 - **Git Identity Isolation**: Checks local git config (`user.email`, `user.name`, `credential.useHttpPath`) and project vault isolation to prevent accidental cross-account token leaks.
 - **Semgrep AST Static Analysis (`--semgrep`)**: Runs deterministic semantic AST code security scanning across the project to catch injection vulnerabilities, path traversal, dangerous imports, and insecure API usage.
@@ -479,6 +486,7 @@ valdoz audit --fix
 What `--fix` automatically remediates:
 - **Exposed `.env` files**: Automatically appends `.env` to `.gitignore` and untracks it from git cache if accidentally tracked (`git rm --cached .env`).
 - **Missing lockfiles**: Automatically generates `package-lock.json` via `npm install --package-lock-only` (or `uv.lock` via `uv lock`) when a manifest is present.
+- **Missing CHANGELOG.md**: Automatically scaffolds a baseline `CHANGELOG.md` following the Keep a Changelog standard matching your project version.
 - **Re-runs audit**: Confirms that fixes resolved the blocking issues.
 
 ---
