@@ -34,6 +34,7 @@ class PackManifest(BaseModel):
     conflicts: List[str] = Field(default_factory=list)
     checks: List[PackCheckDefinition] = Field(default_factory=list)
     questions: List[Dict[str, Any]] = Field(default_factory=list)
+    integrity: Dict[str, str] = Field(default_factory=dict)
 
 
 class PackError(Exception):
@@ -41,6 +42,11 @@ class PackError(Exception):
 
 
 class PackConflictError(PackError):
+    pass
+
+
+class PackSecurityError(PackError):
+    """Raised when an imported pack contains prompt injections, suspicious exploits, or integrity violations."""
     pass
 
 

@@ -9,9 +9,13 @@ from valdoz.approval import (
     MissingDeliverableError,
     NonInteractiveApprovalError,
     approve_phase,
+    generate_human_token,
+    generate_human_token_v2,
+    verify_human_token,
 )
 from valdoz.checks import run_valdoz_audit
 from valdoz.gates import GateCheck, GateReport, run_phase_gate_checks
+from valdoz.healing import redact_secrets_in_text
 from valdoz.phases import (
     PHASE_NAMES,
     advance_phase,
@@ -30,7 +34,7 @@ from valdoz.state import (
     verify_phase_integrity,
 )
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 
 __all__ = [
     "__version__",
@@ -46,9 +50,12 @@ __all__ = [
     "approve_phase",
     "approve_slice",
     "done_slice",
+    "generate_human_token",
+    "generate_human_token_v2",
     "get_state_path",
     "is_write_protected",
     "load_state",
+    "redact_secrets_in_text",
     "reopen_phase",
     "run_phase_gate_checks",
     "run_valdoz_audit",
@@ -56,6 +63,7 @@ __all__ = [
     "start_slice",
     "verify_audit_log_integrity",
     "verify_external_anchor",
+    "verify_human_token",
     "verify_phase_integrity",
 ]
 

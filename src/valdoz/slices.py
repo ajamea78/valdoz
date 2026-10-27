@@ -290,20 +290,33 @@ def approve_slice(
     """Interactively approves a gated slice (Human-Only, Interactive TTY or in-chat token)."""
     from valdoz.approval import verify_human_token
 
-    has_valid_human_token = bool(human_token and verify_human_token(human_token, "slice", slice_id))
+    slice_state = load_slice(project_root, slice_id)
+    if slice_state.status != "gated":
+        raise SliceError(
+            f"Slice '{slice_id}' is not in 'gated' state (current: '{slice_state.status}'). "
+            "Run 'valdoz slice done' with passing test evidence first."
+        )
+
+    spec_full = project_root / slice_state.spec_path
+    spec_hash = compute_file_sha256(spec_full) if spec_full.exists() else None
+
+    has_valid_human_token = bool(
+        human_token
+        and verify_human_token(
+            human_token,
+            "slice",
+            slice_id,
+            deliverables_hash=spec_hash,
+            project_root=project_root,
+            burn=True,
+        )
+    )
 
     if enforce_tty and not sys.stdin.isatty() and not has_valid_human_token:
         raise NonInteractiveApprovalError(
             "Security Violation: Slice approval requires explicit human authorization.\n"
             "Must be approved via an interactive terminal or an authorized Antigravity in-chat approval action.\n"
             "AI agents and scripts cannot approve build slices."
-        )
-
-    slice_state = load_slice(project_root, slice_id)
-    if slice_state.status != "gated":
-        raise SliceError(
-            f"Slice '{slice_id}' is not in 'gated' state (current: '{slice_state.status}'). "
-            "Run 'valdoz slice done' with passing test evidence first."
         )
 
     if confirmation_input is not None:

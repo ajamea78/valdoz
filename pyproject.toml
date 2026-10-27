@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "valdoz-protocol"
-version = "3.1.0"
+version = "3.1.1"
 description = "Antigravity delivery discipline and AI pair-programming governance engine"
 readme = "README.md"
 requires-python = ">=3.10"

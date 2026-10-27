@@ -4,6 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      codeql:
+        patterns:
+          - "github/codeql-action/*"
+      actions:
+        patterns:
+          - "actions/*"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(ci)"

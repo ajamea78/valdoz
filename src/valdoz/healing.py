@@ -17,13 +17,48 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from valdoz.sdk_bridge import FreeLLMAPIConfig, generate_freellmapi_config
 
 MAX_PATCH_FILE_BYTES = 512_000  # 500 KB per file cap to prevent disk-exhaustion DoS
 FORBIDDEN_AI_HOSTS = {"169.254.169.254", "metadata.google.internal", "metadata"}
+
+# ── Redaction Patterns for LLM Scrubbing Pipeline ───────────────────────────
+REDACTION_PATTERNS = [
+    (re.compile(r"-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9_-]+ PRIVATE KEY-----", re.MULTILINE), "[REDACTED_PRIVATE_KEY]"),
+    (re.compile(r"\b(AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}\b"), "[REDACTED_AWS_KEY]"),
+    (re.compile(r"\b(gh[pousr]_[0-9a-zA-Z]{36,}|github_pat_[0-9a-zA-Z_]{50,})\b"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"\b(sk-[a-zA-Z0-9_\-]{20,}|sk-ant-[a-zA-Z0-9_\-]{20,})\b"), "[REDACTED_API_KEY]"),
+    (re.compile(r"\bAIza[0-9A-Za-z-_]{35}\b"), "[REDACTED_GEMINI_KEY]"),
+    (re.compile(r"\bvaldoz-v[12]\.[a-zA-Z0-9_\-\.]+\b"), "[REDACTED_VALDOZ_TOKEN]"),
+    (re.compile(r"(?i)\b(bearer\s+)([a-zA-Z0-9_\-\.]{15,})\b"), r"\1[REDACTED_BEARER_TOKEN]"),
+    (re.compile(r"\beyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*\b"), "[REDACTED_JWT]"),
+    (re.compile(r"(?i)\b((?:password|secret|api_key|access_token|private_key)\s*[:=]\s*['\"]?)([^'\s\"&]{8,})(['\"]?)"), r"\1[REDACTED_CREDENTIAL]\3"),
+]
+
+
+def redact_secrets_in_text(raw_text: str) -> Tuple[str, int]:
+    """Redacts API keys, credentials, private keys, and auth tokens from raw text.
+
+    Scrubs sensitive strings before sending diagnostics to external LLM endpoints.
+    Returns:
+        (sanitized_text, count_of_redacted_secrets)
+    """
+    if not raw_text:
+        return "", 0
+
+    sanitized = raw_text
+    total_redacted = 0
+
+    for pat, replacement in REDACTION_PATTERNS:
+        matches = len(pat.findall(sanitized))
+        if matches > 0:
+            total_redacted += matches
+            sanitized = pat.sub(replacement, sanitized)
+
+    return sanitized, total_redacted
 
 
 class HealingContext(BaseModel):
@@ -105,7 +140,14 @@ def collect_failure_context(
 
 
 def build_diagnosis_prompt(ctx: HealingContext) -> str:
-    """Builds a precise system prompt for the AI root-cause analysis and patch generator."""
+    """Builds a precise system prompt for the AI root-cause analysis and patch generator.
+
+    Automatically scrubs sensitive credentials, API keys, private keys, and auth tokens
+    from error traces, git diffs, and slice specs to prevent data exfiltration.
+    """
+    clean_error, _ = redact_secrets_in_text(ctx.error_trace)
+    clean_diff, _ = redact_secrets_in_text(ctx.git_diff or "")
+
     prompt = f"""You are the ValdoZ Protocol Autonomous Self-Healing Engine.
 A build, test, or gate check has failed. Analyze the failure trace, identify the exact root cause, and provide a minimal, working code fix.
 
@@ -116,19 +158,20 @@ FAILURE CONTEXT:
 
 ERROR TRACE / FAILURE LOG:
 ```
-{ctx.error_trace}
+{clean_error}
 ```
 
 RECENT GIT DIFF:
 ```
-{ctx.git_diff or 'No uncommitted diff'}
+{clean_diff or 'No uncommitted diff'}
 ```
 """
     if ctx.slice_spec:
+        clean_spec, _ = redact_secrets_in_text(ctx.slice_spec[:2000])
         prompt += f"""
 SLICE SPECIFICATION:
 ```markdown
-{ctx.slice_spec[:2000]}
+{clean_spec}
 ```
 """
 

@@ -116,6 +116,12 @@ def get_last_audit_entry(project_root: Path) -> Tuple[str, Optional[str]]:
     return hashlib.sha256(last_line.encode("utf-8")).hexdigest(), last_line
 
 
+def canonical_json_bytes(data: Dict[str, Any]) -> bytes:
+    """Serializes data structure into deterministic canonical JSON (RFC 8785)."""
+    import json
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+
+
 def append_approvals_log(project_root: Path, message: str) -> str:
     """Appends an entry to the cryptographic hash-chained append-only audit trail."""
     import hashlib
@@ -123,8 +129,8 @@ def append_approvals_log(project_root: Path, message: str) -> str:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).isoformat()
     prev_hash, _ = get_last_audit_entry(project_root)
-    payload = f"{prev_hash}|{ts}|{message}"
-    entry_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    payload_obj = {"prev": prev_hash, "ts": ts, "msg": message}
+    entry_hash = hashlib.sha256(canonical_json_bytes(payload_obj)).hexdigest()
     entry_line = f"[{ts}] [CHAIN:{entry_hash}] [PREV:{prev_hash}] {message}\n"
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(entry_line)
@@ -164,9 +170,12 @@ def verify_audit_log_integrity(project_root: Path) -> Tuple[bool, List[str]]:
         elif prev_hash != expected_prev:
             violations.append(f"Line {idx}: Hash chain link broken. Expected prev '{expected_prev[:12]}...', got '{prev_hash[:12]}...'")
 
-        recalculated = hashlib.sha256(f"{prev_hash}|{ts}|{msg}".encode("utf-8")).hexdigest()
+        # Verify against canonical JSON hash first, with backward-compatible legacy fallback
+        recalculated = hashlib.sha256(canonical_json_bytes({"prev": prev_hash, "ts": ts, "msg": msg})).hexdigest()
         if recalculated != chain_hash:
-            violations.append(f"Line {idx}: Entry payload tampering detected. Recalculated '{recalculated[:12]}...' != recorded '{chain_hash[:12]}...'")
+            legacy_recalculated = hashlib.sha256(f"{prev_hash}|{ts}|{msg}".encode("utf-8")).hexdigest()
+            if legacy_recalculated != chain_hash:
+                violations.append(f"Line {idx}: Entry payload tampering detected. Recalculated '{recalculated[:12]}...' != recorded '{chain_hash[:12]}...'")
 
         expected_prev = chain_hash
 

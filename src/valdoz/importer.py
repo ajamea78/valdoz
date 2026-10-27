@@ -10,6 +10,7 @@ into ValdoZ-compliant pack manifests, skills, and rules:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -23,8 +24,29 @@ from valdoz.packs import (
     PackCheckDefinition,
     PackError,
     PackManifest,
+    PackSecurityError,
 )
 from valdoz.state import load_state, save_state
+
+# ── Prompt Injection & Malicious Pattern Scanners ───────────────────────────
+PROMPT_INJECTION_PATTERNS = [
+    (re.compile(r"(?i)\b(?:ignore|disregard|forget|bypass)\s+(?:all\s+)?(?:previous|prior|system)\s+(?:instructions|guidelines|rules|prompts)\b"), "Instruction Override / Ignore Rules"),
+    (re.compile(r"(?i)\b(?:you\s+are\s+now\s+in\s+developer\s+mode|dan\s+mode|jailbreak)\b"), "Jailbreak Directive"),
+    (re.compile(r"(?i)\b(?:system\s+prompt\s+override|override\s+system\s+prompt)\b"), "System Prompt Override"),
+    (re.compile(r"<!--[\s\S]*?(?:ignore|override|system\s+prompt|curl|eval|bash|exec)[\s\S]*?-->", re.IGNORECASE), "Hidden Markdown Injection in Comments"),
+    (re.compile(r"(?i)<\s*script[^>]*>"), "Embedded HTML Script Tag"),
+    (re.compile(r"(?i)\b(?:javascript:|data:text/html)"), "Malicious URI Protocol Handler"),
+    (re.compile(r"(?i)\b(?:curl|wget)\s+.*?(?:http|ftp|tcp).*?\|\s*(?:ba)?sh\b"), "Arbitrary Shell Execution Pipe"),
+]
+
+
+def scan_prompt_injection_patterns(text: str) -> List[str]:
+    """Scans text for adversarial prompt injection directives or malicious wrappers."""
+    findings: List[str] = []
+    for pat, desc in PROMPT_INJECTION_PATTERNS:
+        if pat.search(text):
+            findings.append(desc)
+    return findings
 
 
 def sanitize_pack_id(name: str) -> str:
@@ -66,7 +88,8 @@ def import_plugin_from_dir(
         except Exception:
             pass
 
-    # 2. Extract and copy skills
+    # 2. Extract and copy skills with prompt injection scanning & integrity hashing
+    integrity_map: Dict[str, str] = {}
     skills_found: List[Path] = []
     for skill_path in source_dir.glob("skills/**/SKILL.md"):
         skills_found.append(skill_path)
@@ -83,21 +106,43 @@ def import_plugin_from_dir(
         skill_dest_dir.mkdir(parents=True, exist_ok=True)
 
         content = sfile.read_text(encoding="utf-8", errors="replace")
+
+        # Security scan for prompt injections
+        injections = scan_prompt_injection_patterns(content)
+        if injections:
+            raise PackSecurityError(
+                f"Malicious content or prompt injection pattern detected in '{sfile.name}': {', '.join(injections)}"
+            )
+
         # Ensure standard YAML frontmatter
         if not content.startswith("---"):
             fm = f"---\nname: {target_skill_name}\ndescription: >-\n  Imported skill from {pid} pack.\n---\n\n"
             content = fm + content
 
-        (skill_dest_dir / "SKILL.md").write_text(content, encoding="utf-8")
+        dest_file = skill_dest_dir / "SKILL.md"
+        dest_file.write_text(content, encoding="utf-8")
+        rel_path = f".agent/skills/{target_skill_name}/SKILL.md"
+        integrity_map[rel_path] = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-    # 3. Extract rules
+    # 3. Extract rules with prompt injection scanning & integrity hashing
     rules_found = list(source_dir.glob("rules/*.md"))
     if rules_found:
         target_rules_dir = project_root / ".agent" / "rules"
         target_rules_dir.mkdir(parents=True, exist_ok=True)
         for rfile in rules_found:
+            rcontent = rfile.read_text(encoding="utf-8", errors="replace")
+            injections = scan_prompt_injection_patterns(rcontent)
+            if injections:
+                raise PackSecurityError(
+                    f"Malicious content or prompt injection pattern detected in rule '{rfile.name}': {', '.join(injections)}"
+                )
             rname = f"valdoz-{pid}-{rfile.name}"
-            (target_rules_dir / rname).write_text(rfile.read_text(encoding="utf-8", errors="replace"))
+            dest_rule = target_rules_dir / rname
+            dest_rule.write_text(rcontent, encoding="utf-8")
+            rel_path = f".agent/rules/{rname}"
+            integrity_map[rel_path] = hashlib.sha256(rcontent.encode("utf-8")).hexdigest()
+
+    manifest_data["integrity"] = integrity_map
 
     # 4. Generate checks
     manifest_data["checks"].append({
@@ -163,3 +208,34 @@ def import_pack(
         return import_plugin_from_dir(project_root, adapter_dir, pack_id=pack_id or f"wshobson-{plugin_name}")
 
     raise PackError(f"Unsupported pack source: '{source}'. Expected local path or 'wshobson/agents:<plugin>'.")
+
+
+def verify_pack_integrity(project_root: Path, pack_id: str) -> Tuple[bool, List[str]]:
+    """Verifies that installed skills and rules match the SHA-256 integrity map in the pack manifest."""
+    manifest_file = project_root / ".valdoz" / "packs" / pack_id / "manifest.yaml"
+    if not manifest_file.exists():
+        return False, [f"Pack manifest not found: {manifest_file}"]
+
+    try:
+        data = yaml.safe_load(manifest_file.read_text(encoding="utf-8"))
+        integrity_map = data.get("integrity", {})
+    except Exception as e:
+        return False, [f"Failed to read pack manifest: {e}"]
+
+    if not integrity_map:
+        return True, []
+
+    violations: List[str] = []
+    for rel_path, expected_sha in integrity_map.items():
+        target_file = project_root / rel_path
+        if not target_file.exists():
+            violations.append(f"Missing file declared in pack integrity: '{rel_path}'")
+            continue
+        try:
+            actual_sha = hashlib.sha256(target_file.read_bytes()).hexdigest()
+            if actual_sha != expected_sha:
+                violations.append(f"Integrity mismatch in '{rel_path}': expected {expected_sha[:10]}..., got {actual_sha[:10]}...")
+        except Exception as e:
+            violations.append(f"Failed to read '{rel_path}': {e}")
+
+    return len(violations) == 0, violations

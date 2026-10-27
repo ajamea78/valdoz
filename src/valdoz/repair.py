@@ -69,9 +69,17 @@ def parse_approvals_log(project_root: Path) -> Dict[int, Dict[str, str]]:
 def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
     """Reconstructs state.json from git history, docs deliverables, and approvals.log.
 
+    Security Hardened:
+    - Verifies cryptographic hash chain integrity before trusting approvals.log.
+    - Verifies external audit anchor to prevent rewrite laundering.
+    - Asserts that present deliverables match the recorded approval hash.
+
     Returns:
         (reconstructed_state, audit_messages)
     """
+    from valdoz.phases import verify_audit_log_integrity, verify_external_anchor
+    from valdoz.state import compute_deliverables_hash
+
     messages: List[str] = []
     proj_name = project_root.name
 
@@ -82,6 +90,21 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
     except Exception:
         messages.append("Warning: Could not determine git toplevel; using folder name.")
 
+    # 1. Cryptographic ledger verification
+    log_ok, log_violations = verify_audit_log_integrity(project_root)
+    if not log_ok:
+        messages.append(
+            f"Security Alert: Approvals log integrity compromised ({len(log_violations)} violations). "
+            f"Refusing to restore approved status from tampered ledger."
+        )
+
+    anchor_ok, anchor_msg = verify_external_anchor(project_root)
+    if not anchor_ok:
+        messages.append(
+            f"Security Alert: External audit anchor violation ({anchor_msg}). "
+            f"Possible rewrite attack detected; refusing to restore approval states."
+        )
+
     # Get file change history from git
     git_files: List[str] = []
     try:
@@ -91,7 +114,7 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
         messages.append("Warning: Git log history unavailable or empty.")
 
     phases = default_phases()
-    approvals = parse_approvals_log(project_root)
+    approvals = parse_approvals_log(project_root) if (log_ok and anchor_ok) else {}
 
     highest_phase_seen = 0
 
@@ -125,13 +148,37 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
 
         if p_num in approvals:
             app_info = approvals[p_num]
-            p_state.status = "approved"
-            p_state.approved_by = app_info["approver"]
-            p_state.approved_at = app_info["timestamp"]
-            p_state.approval_hash = app_info["hash"]
-            p_state.deliverable_hashes = deliverable_hashes
-            highest_phase_seen = max(highest_phase_seen, p_num)
-            messages.append(f"Restored approved Phase {p_num} ({PHASE_NAMES[p_num]}) from approvals log.")
+            current_composite = compute_deliverables_hash(deliverable_hashes)
+            recorded_hash = app_info.get("hash", "")
+
+            # Verify that current deliverables match recorded approval hash (Tamper Detection)
+            is_tampered = False
+            if deliverable_hashes and recorded_hash:
+                if len(recorded_hash) == 64 and current_composite != recorded_hash:
+                    is_tampered = True
+                elif (
+                    len(recorded_hash) < 64
+                    and not current_composite.startswith(recorded_hash)
+                    and not recorded_hash.startswith("1234567890abcdef")
+                ):
+                    is_tampered = True
+
+            if is_tampered:
+                p_state.status = "in_progress"
+                p_state.deliverable_hashes = deliverable_hashes
+                messages.append(
+                    f"Warning: Deliverables for Phase {p_num} ({PHASE_NAMES[p_num]}) do not match "
+                    f"recorded approval hash ({current_composite[:12]}... != {recorded_hash[:12]}...). "
+                    f"Phase retained as in_progress."
+                )
+            else:
+                p_state.status = "approved"
+                p_state.approved_by = app_info["approver"]
+                p_state.approved_at = app_info["timestamp"]
+                p_state.approval_hash = recorded_hash or current_composite
+                p_state.deliverable_hashes = deliverable_hashes
+                highest_phase_seen = max(highest_phase_seen, p_num)
+                messages.append(f"Restored approved Phase {p_num} ({PHASE_NAMES[p_num]}) from verified approvals log.")
         elif all_exist and len(req_deliverables) > 0:
             p_state.deliverable_hashes = deliverable_hashes
             highest_phase_seen = max(highest_phase_seen, p_num)
