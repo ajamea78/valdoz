@@ -437,6 +437,18 @@ ValdoZ automatically checks:
 - **Secrets Scan**: Scans for hardcoded AWS keys, OpenAI keys, private keys, and `.env` files (distinguishes safely gitignored local files from exposed files).
 - **Lockfile Check**: Verifies that `package-lock.json`, `uv.lock`, etc. are committed and dependencies are pinned.
 - **Undeclared Imports**: Scans Python and JavaScript files to verify that all imported modules are declared in your package manifests (`pyproject.toml`, `package.json`).
+- **Git Identity Isolation**: Checks local git config (`user.email`, `user.name`, `credential.useHttpPath`) and project vault isolation to prevent accidental cross-account token leaks.
+- **Semgrep AST Static Analysis (`--semgrep`)**: Runs deterministic semantic AST code security scanning across the project to catch injection vulnerabilities, path traversal, dangerous imports, and insecure API usage.
+
+### Running Semgrep SAST Vulnerability Analysis
+To trigger AST static security analysis with Semgrep during an audit:
+```bash
+valdoz audit --semgrep
+```
+Or permanently enable the `security` pack so Semgrep SAST runs automatically on gate checks:
+```bash
+valdoz pack add security
+```
 
 ### Automated Issue Remediation (`valdoz audit --fix`)
 Instead of just reporting audit failures, ValdoZ can automatically fix common hygiene issues for you:
