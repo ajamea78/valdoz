@@ -564,7 +564,8 @@ ValdoZ v3.1.1 features an upgraded **Human Non-Repudiation In-Chat Bridge with S
    - The token embeds the composite SHA-256 hash of all deliverables on disk, eliminating Time-of-Check to Time-of-Use (TOCTOU) file modification races.
 4. **Out-of-Workspace Keystore**: Master signing secrets resolve from `VALDOZ_APPROVAL_SECRET` or the user's OS keystore at `~/.config/valdoz/keys/approval.key` (`0700` dir, `0600` file permissions), completely isolating keys from in-workspace agent execution.
 5. **Single-Use Nonce Burn**: Consumed tokens have their nonces recorded in `.valdoz/consumed_nonces.json` with 15-minute pruning, preventing token replay attacks within TTL windows.
-6. **Canonical JSON Audit Logging**: Approvals append to `.valdoz/approvals.log` using RFC 8785 canonical JSON formatting, establishing a verifiable hash chain anchored to Git tags (`valdoz anchor`).
+6. **Canonical JSON Audit Logging**: Approvals append to `.valdoz/approvals.log` using RFC 8785 canonical JSON formatting (preserving raw UTF-8 for Arabic and international characters without `\uXXXX` escaping), establishing a verifiable hash chain anchored to Git tags (`valdoz anchor`).
+7. **MCP Protocol Hardening**: Stdio request lines enforce a 1 MB per-line size limit to prevent memory-exhaustion DoS, required tool parameters are validated early with clear client error messages, and credential vault paths are masked to relative project paths.
 
 ### Live Generative UI Dashboard
 You can render a real-time, theme-aware visual dashboard directly in Antigravity chat:
@@ -618,6 +619,8 @@ valdoz heal gate --preview
    - AI endpoints targeting cloud metadata addresses (`169.254.169.254`, `metadata.google.internal`) or loopbacks are blocked.
    - Patch sizes are capped at 512 KB per file.
    - Python patches are syntactically parsed with `ast.parse()` to ensure structural validity before disk writes.
+   - Retries apply exponential backoff (`2 ** (attempt - 1)` seconds) to prevent hammering external LLM endpoints.
+   - Patch diffs for newly created files include standard POSIX/GNU `@@ -0,0 +1,N @@` hunk headers.
 5. **Targeted Code Application**: Applies the fix to offending files under quarantine protection.
 6. **Mechanical Re-Verification**: Automatically re-runs test suites or gate conditions.
 7. **Human Gate Intact**: Once passing, a `HealingReport` is generated for human review.
@@ -683,22 +686,21 @@ Approving before the dwell time elapses raises `TimeLockViolationError` (unless 
 ## 12. AI Agent Oversight & Anomaly Controls
 
 ### 1. Behavioral Budgets per Phase
-Track how many file writes and tool calls an agent performs per phase in `.valdoz/sessions/telemetry.json`:
+Track how many file writes and tool calls an agent performs per phase in `.valdoz/sessions/telemetry.json`. ValdoZ enforces dual-metric ceilings (defaulting to 100 file writes for Phase 6 build slices), configurable in `.valdozrc.json`:
 ```json
 {
   "oversight": {
     "behavioral_budget": {
-      "1": 20,
-      "2": 20,
-      "6": 250
+      "phase_6_file_writes": 100,
+      "phase_6_tool_calls": 200
     }
   }
 }
 ```
-If an AI agent enters an infinite retry loop or starts indiscriminately editing files, ValdoZ raises an anomaly alert and halts execution.
+If an AI agent enters an infinite retry loop or exceeds allocated tool call / file write budgets, ValdoZ raises an anomaly alert and halts execution.
 
 ### 2. Semantic Diff Reviews
-Before AI-generated code patches are applied, ValdoZ leverages the LLM bridge to generate concise 3–5 bullet point plain-English summaries of changes, persisted to `.valdoz/history/semantic_diffs.jsonl`.
+Before AI-generated code patches are applied, ValdoZ leverages the LLM bridge to generate concise 3–5 bullet point plain-English summaries of changes, persisted to `.valdoz/history/semantic_diffs.jsonl`. All diff snippets are automatically scrubbed for secrets and credentials via `redact_secrets_in_text()` before being logged to disk.
 
 ### 3. Pre-Build Intent Declarations
 Before initiating complex builds, the agent declares its planned architecture changes in `.valdoz/intents/phase-<N>.md`. Gate checks ensure that deliverables align with declared intent.
