@@ -66,7 +66,8 @@ flowchart TD
 
 ---
 
-## 4. Out-of-Scope Non-Goals
+## 4. Out-of-Scope Non-Goals & Compliance Boundaries
 
 1. **Kernel-Level Hypervisor Sandboxing**: ValdoZ runs within standard developer environments and does not replace container runtimes (e.g. Docker, gVisor) or OS-level sandboxes.
 2. **Post-Deployment Runtime Exploits**: ValdoZ governs the pre-commit and pre-deployment delivery lifecycle; it does not perform live network intrusion detection or runtime WAF operations.
+3. **Application-Layer SaaS Compliance Controls (GDPR / HIPAA / PCI DSS)**: ValdoZ is an on-premise CLI tool, Python package, and agent harness. It is **not** a multi-tenant cloud service, SaaS application, or database. It collects zero consumer data, processes zero credit card transactions, and hosts zero HTTP web services. Web-application specific regulatory controls (e.g., cookie consent banners, payment tokenization, HIPAA PHI encryption at rest, HTTP security headers) apply to user software built *under* ValdoZ governance, not to the ValdoZ delivery engine itself. Users building regulated web services can enforce these requirements on their projects by enabling the `security` and `api` packs.

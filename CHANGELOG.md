@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.2] - 2026-10-27
 
 ### Security Hardening & Bug Fixes
+- **Static Type Safety & Analysis Remediations**:
+  - Resolved 58 mypy type errors across `cli.py`, `checks.py`, `importer.py`, `healing.py`, and `mcp_server.py`.
+  - Added automated mypy type verification step to GitHub Actions CI (`.github/workflows/test.yml`).
+  - Documented compliance boundaries in `docs/THREAT_MODEL.md` formalizing why SaaS-layer regulations (GDPR/HIPAA/PCI DSS) do not apply to the on-premise CLI binary.
 - **Automated Documentation Enforcement (Rule 11 & `doc-sync`)**:
   - Implemented `scan_doc_sync()` audit check in `src/valdoz/checks.py` and registered it in the `base` pack to mechanically block un-synchronized code releases.
   - Added Rule 11 ("Atomic Documentation Reflex") across core runtime configurations (`sync.py`, `AGENTS.md`, `GEMINI.md`, `.agent/rules/03-doc-sync.md`), mandating automatic transition to the `scribe` role in the same session to record functional deltas.
