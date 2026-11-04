@@ -17,7 +17,7 @@ import re
 import shutil
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 from valdoz.packs import (

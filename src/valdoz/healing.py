@@ -311,12 +311,12 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
     """Re-runs the corresponding verification based on failure type."""
     if ctx.failure_type == "audit":
         from valdoz.checks import run_valdoz_audit
-        rep = run_valdoz_audit(project_root, strict=True)
-        return rep.passed
+        audit_rep = run_valdoz_audit(project_root, strict=True)
+        return audit_rep.passed
     elif ctx.failure_type in ("gate", "gate_check"):
         from valdoz.gates import run_phase_gate_checks
-        rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
-        return rep.passed
+        gate_rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
+        return gate_rep.passed
     elif ctx.failure_type == "ci":
         from valdoz.checks import run_valdoz_audit
         from valdoz.gates import run_phase_gate_checks

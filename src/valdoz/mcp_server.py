@@ -381,16 +381,16 @@ def handle_heal_tool(
 
     if target == "audit":
         from valdoz.checks import run_valdoz_audit
-        rep = run_valdoz_audit(root, strict=True)
-        if rep.passed:
+        audit_res = run_valdoz_audit(root, strict=True)
+        if audit_res.passed:
             return {"status": "skipped", "message": "Audit is already passing."}
-        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in audit_res.checks if not c.passed)
     elif target == "gate":
         from valdoz.gates import run_phase_gate_checks
-        rep = run_phase_gate_checks(root)
-        if rep.passed:
+        gate_res = run_phase_gate_checks(root)
+        if gate_res.passed:
             return {"status": "skipped", "message": "Gate is already passing."}
-        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+        error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in gate_res.checks if not c.passed)
     elif target == "slice":
         if not slice_id:
             return {"status": "error", "error": "slice_id is required when healing a slice."}
@@ -404,7 +404,7 @@ def handle_heal_tool(
             from valdoz.gates import run_phase_gate_checks
             audit_rep = run_valdoz_audit(root, strict=True)
             gate_rep = run_phase_gate_checks(root)
-            errors = []
+            errors: List[str] = []
             if not audit_rep.passed:
                 errors.extend(f"[Audit] [{c.id}] {c.name}: {c.message}" for c in audit_rep.checks if not c.passed)
             if not gate_rep.passed:

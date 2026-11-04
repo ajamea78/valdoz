@@ -17,7 +17,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
 from valdoz.packs import (
@@ -437,10 +437,10 @@ def scan_semgrep(project_root: Path) -> AuditCheckResult:
         )
 
     target_path = "src" if (project_root / "src").is_dir() else "."
-    cmd = (
+    cmd: List[str] = (
         [semgrep_bin, "scan", "--config", "auto", "--json", "--quiet", target_path]
         if semgrep_bin
-        else [uvx_bin, "semgrep", "scan", "--config", "auto", "--json", "--quiet", target_path]
+        else [uvx_bin or "uvx", "semgrep", "scan", "--config", "auto", "--json", "--quiet", target_path]
     )
 
     try:
@@ -876,7 +876,7 @@ def resolve_package_license(pkg_name: str, ecosystem: str = "pypi", no_network: 
         try:
             import importlib.metadata
             meta = importlib.metadata.metadata(norm)
-            raw = meta.get("License") or meta.get("License-Expression") or ""
+            raw = str(getattr(meta, "get", lambda k: None)("License") or getattr(meta, "get", lambda k: None)("License-Expression") or "")
             classifiers = [c for c in (meta.get_all("Classifier") or []) if "License" in c]
             cat, name = categorize_license(raw, classifiers)
             if cat != "unknown":

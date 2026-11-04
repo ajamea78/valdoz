@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import os
 import sys
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import typer
 from rich.console import Console
@@ -185,29 +186,30 @@ def project_init(
         def yes_no(val: bool) -> str:
             return "[bold green]✓[/bold green]" if val else "[dim]✗[/dim]"
 
-        scan_table.add_row("Source Code", yes_no(signals.has_source_code),
-                          f"{signals.source_file_count} files ({', '.join(sorted(signals.source_languages)) or '-'})")
-        scan_table.add_row("Tests", yes_no(signals.has_tests),
-                          f"{signals.test_file_count} files ({', '.join(sorted(signals.test_frameworks)) or '-'})")
-        scan_table.add_row("Documentation", yes_no(signals.has_docs_dir or signals.has_readme),
-                          f"{'docs/' if signals.has_docs_dir else '-'} {'README' if signals.has_readme else ''}")
-        scan_table.add_row("Package Manifest", yes_no(signals.has_package_manifest),
-                          ", ".join(sorted(signals.manifests_found)) or "-")
-        scan_table.add_row("Lockfile", yes_no(signals.has_lockfile), "Pinned" if signals.has_lockfile else "Missing")
-        scan_table.add_row("CI/CD", yes_no(signals.has_ci_config),
-                          ", ".join(sorted(signals.ci_systems)) or "-")
-        scan_table.add_row("Deploy Configs", yes_no(signals.has_deploy_configs),
-                          " | ".join(filter(None, [
-                              "Docker" if signals.has_dockerfile else "",
-                              "Compose" if signals.has_docker_compose else "",
-                              "K8s" if signals.has_k8s_configs else "",
-                              "Terraform" if signals.has_terraform else "",
-                          ])) or "-")
-        scan_table.add_row("Git History", yes_no(signals.has_git),
-                          f"{signals.git_commit_count} commits, {signals.git_age_days}d old" if signals.has_git else "-")
-        scan_table.add_row("Linter Config", yes_no(signals.has_linter_config),
-                          ", ".join(sorted(signals.linter_configs)) or "-")
-        console.print(scan_table)
+        if signals:
+            scan_table.add_row("Source Code", yes_no(signals.has_source_code),
+                              f"{signals.source_file_count} files ({', '.join(sorted(signals.source_languages)) or '-'})")
+            scan_table.add_row("Tests", yes_no(signals.has_tests),
+                              f"{signals.test_file_count} files ({', '.join(sorted(signals.test_frameworks)) or '-'})")
+            scan_table.add_row("Documentation", yes_no(signals.has_docs_dir or signals.has_readme),
+                              f"{'docs/' if signals.has_docs_dir else '-'} {'README' if signals.has_readme else ''}")
+            scan_table.add_row("Package Manifest", yes_no(signals.has_package_manifest),
+                              ", ".join(sorted(signals.manifests_found)) or "-")
+            scan_table.add_row("Lockfile", yes_no(signals.has_lockfile), "Pinned" if signals.has_lockfile else "Missing")
+            scan_table.add_row("CI/CD", yes_no(signals.has_ci_config),
+                              ", ".join(sorted(signals.ci_systems)) or "-")
+            scan_table.add_row("Deploy Configs", yes_no(signals.has_deploy_configs),
+                              " | ".join(filter(None, [
+                                  "Docker" if signals.has_dockerfile else "",
+                                  "Compose" if signals.has_docker_compose else "",
+                                  "K8s" if signals.has_k8s_configs else "",
+                                  "Terraform" if signals.has_terraform else "",
+                              ])) or "-")
+            scan_table.add_row("Git History", yes_no(signals.has_git),
+                              f"{signals.git_commit_count} commits, {signals.git_age_days}d old" if signals.has_git else "-")
+            scan_table.add_row("Linter Config", yes_no(signals.has_linter_config),
+                              ", ".join(sorted(signals.linter_configs)) or "-")
+            console.print(scan_table)
 
         # Warnings
         if assessment.warnings:
@@ -1157,11 +1159,11 @@ def heal_cmd(
     elif target == "gate":
         if not error_output:
             from valdoz.gates import run_phase_gate_checks
-            rep = run_phase_gate_checks(root)
-            if rep.passed:
-                console.print(f"[green]✓ Phase {rep.phase} gate is already passing! No healing needed.[/green]")
+            gate_rep = run_phase_gate_checks(root)
+            if gate_rep.passed:
+                console.print(f"[green]✓ Phase {gate_rep.phase} gate is already passing! No healing needed.[/green]")
                 return
-            error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in rep.checks if not c.passed)
+            error_output = "\n".join(f"[{c.id}] {c.name}: {c.message}" for c in gate_rep.checks if not c.passed)
     elif target == "slice":
         if not slice_id:
             console.print("[red]Error: --slice-id is required when healing a slice.[/red]")
@@ -1178,7 +1180,7 @@ def heal_cmd(
                 from valdoz.gates import run_phase_gate_checks
                 audit_rep = run_valdoz_audit(root, strict=True)
                 gate_rep = run_phase_gate_checks(root)
-                errors = []
+                errors: List[str] = []
                 if not audit_rep.passed:
                     errors.extend(f"[Audit] [{c.id}] {c.name}: {c.message}" for c in audit_rep.checks if not c.passed)
                 if not gate_rep.passed:
@@ -1254,7 +1256,7 @@ def explain_cmd(
         p_state = state.phases.get(str(p_num))
         status = p_state.status if p_state else "pending"
 
-        if status == "approved":
+        if status == "approved" and p_state is not None:
             app_info = approvals.get(p_num, {})
             approver = app_info.get("approver") or p_state.approved_by or "Human Lead"
             ts = app_info.get("timestamp") or p_state.approved_at or "Unknown"
@@ -1263,7 +1265,7 @@ def explain_cmd(
             lines.append(f"- **Status:** Approved by `{approver}` at `{ts}`")
             if comp_hash:
                 lines.append(f"- **Composite Audit Hash:** `{comp_hash}...`")
-            delivs = list(p_state.deliverable_hashes.keys()) if p_state else []
+            delivs = list(p_state.deliverable_hashes.keys())
             if delivs:
                 lines.append(f"- **Frozen Deliverables ({len(delivs)}):** {', '.join(delivs)}")
         elif status == "in_progress":
@@ -1363,7 +1365,7 @@ def mcp_register_cmd():
     cfg_path = Path.home() / ".gemini" / "config" / "mcp_config.json"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {"mcpServers": {}}
+    data: Dict[str, Any] = {"mcpServers": {}}
     if cfg_path.exists():
         try:
             data = json.loads(cfg_path.read_text(encoding="utf-8"))
