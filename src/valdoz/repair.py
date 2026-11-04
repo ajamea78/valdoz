@@ -156,12 +156,14 @@ def repair_state(project_root: Path) -> Tuple[ValdozState, List[str]]:
             if deliverable_hashes and recorded_hash:
                 if len(recorded_hash) == 64 and current_composite != recorded_hash:
                     is_tampered = True
-                elif (
-                    len(recorded_hash) < 64
-                    and not current_composite.startswith(recorded_hash)
-                    and not recorded_hash.startswith("1234567890abcdef")
-                ):
-                    is_tampered = True
+                elif len(recorded_hash) < 64:
+                    if not current_composite.startswith(recorded_hash) and not recorded_hash.startswith("1234567890abcdef"):
+                        is_tampered = True
+                    else:
+                        messages.append(
+                            f"Notice: Phase {p_num} ({PHASE_NAMES[p_num]}) uses legacy truncated hash "
+                            f"({recorded_hash[:12]}...). Recommend full re-approval with 64-char SHA-256."
+                        )
 
             if is_tampered:
                 p_state.status = "in_progress"

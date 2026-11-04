@@ -4,7 +4,7 @@ Generates and updates Antigravity configuration files, rules, and skills:
 - AGENTS.md (cross-agent managed block)
 - GEMINI.md (Antigravity project rules)
 - .agent/rules/*.md (modular rules)
-- .agent/skills/valdoz-phase-*/SKILL.md (per-phase playbooks)
+- .agent/skills/valdoz-*/SKILL.md (user-friendly streamlined playbooks)
 
 Enforces:
 - 12,000-character cap on all generated files
@@ -15,8 +15,9 @@ Enforces:
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from valdoz.phases import (
     PHASE_COMMAND_WHITELISTS,
@@ -125,57 +126,285 @@ def generate_rule_files() -> Dict[str, str]:
     }
 
 
-def generate_phase_playbook(phase_num: int) -> str:
-    name = PHASE_NAMES.get(phase_num, f"Phase {phase_num}")
-    slug = name.lower().replace(" ", "-")
-    deliverables = PHASE_DELIVERABLES.get(phase_num, [])
-    whitelist = PHASE_COMMAND_WHITELISTS.get(phase_num, ["valdoz *", "git status"])
-    side_effect = SIDE_EFFECT_CLASSES.get(phase_num)
-
-    deliverable_list = "\n".join(f"- `{d}`" for d in deliverables) if deliverables else "- Dynamic deliverables"
-    whitelist_str = ", ".join(f"`{w}`" for w in whitelist)
-
-    instructions = {
-        1: "Read the client's brief thoroughly. Quote the brief verbatim in `docs/01-intake.md`. Extract open questions, risks, assumptions, and key stakeholders. Ask questions one at a time.",
-        2: "Define functional and non-functional requirements, acceptance criteria, and an explicit out-of-scope section in `docs/02-requirements.md`.",
-        3: "Compare technical options against the requirements. Provide 2-3 stack options with trade-offs and a recommendation. Record the chosen stack in `docs/03-stack-decision.md` and log decisions with `valdoz decision add`.",
-        4: "Design system architecture, data models, API contracts, integration points, and the slice roadmap in `docs/04-architecture.md` and `docs/04-plan.md`.",
-        5: "Initialize the project repository structure, linter, formatter, test runner, `.env.example`, and CI workflow file. Ensure a baseline empty test suite passes.",
-        6: "Implement the project in tested slices. For each slice, create `docs/slices/NN-name.md`, write tests first, implement code, and run `valdoz slice done`.",
-        7: "Execute full verification: unit tests, integration tests, accessibility check, security checklist, and acceptance walkthrough in `docs/07-verification.md`.",
-        8: "Prepare deployment environment, deployment procedures, live health checks, and rollback strategy in `docs/08-deploy.md`. CAUTION: Real-world side effects are IRREVERSIBLE.",
-        9: "Draft operational runbook, access transfer plan, known issues, and client sign-off in `docs/09-handover.md`.",
-        10: "Handle post-handover change requests with short intake, impact note, and approval in `docs/changes/CR-NNN.md`.",
-    }.get(phase_num, "Follow the phase procedures diligently.")
-
-    return f"""---
-name: valdoz-phase-{phase_num}-{slug}
+def generate_streamlined_skills() -> Dict[str, str]:
+    """Generates user-friendly, streamlined ValdoZ playbooks for Antigravity slash commands."""
+    return {
+        "valdoz-guide": """---
+name: valdoz-guide
 description: >-
-  Use this playbook when operating in Phase {phase_num} ({name}) of a ValdoZ project.
+  End-to-end guru companion: guides you from raw idea to live product with industry best practices across web, mobile, and APIs.
 ---
 
-# Phase {phase_num}: {name} Playbook
+# ValdoZ Guru: End-to-End Product Guide
+
+Welcome! This playbook serves as your expert lead architect and product advisor. It guides you seamlessly through the entire software delivery lifecycle without requiring memorization of internal phase numbers.
+
+## How the Guru Operates
+1. **Identify the Project State:** Evaluates whether you are starting fresh, redesigning an existing app, or launching a new feature.
+2. **Step-by-Step Delivery Milestones:**
+   - **Step 1 — Product Concept:** Runs `/valdoz-concept` to flesh out requirements and user journeys.
+   - **Step 2 — Visual & UX Design:** Runs `/valdoz-design` when you want to design or overhaul the UI, screens, or brand theme.
+   - **Step 3 — Technical Architecture & Hosting:** Runs `/valdoz-architect` to pick the tech stack, hosting providers (Vercel, Supabase, Cloud Run, AWS), and database/API schemas.
+   - **Step 4 — External Addons & Repos:** Runs `/valdoz-import` to integrate GitHub UI kits, templates, or libraries safely.
+   - **Step 5 — Tooling & Setup:** Runs `/valdoz-setup` to configure linters, formatters, Docker, and CI/CD.
+   - **Step 6 — Slice Implementation:** Runs `/valdoz-build` to implement features with strict TDD discipline.
+   - **Step 7 — Verification & QA:** Runs `/valdoz-verify` to ensure tests, SAST scans, and gate checks pass.
+   - **Step 8 — Cloud Deployment:** Runs `/valdoz-deploy` to ship the app to staging or production.
+   - **Step 9 — Post-Launch Evolution:** Runs `/valdoz-changes` for continuous updates.
+
+## Operating Guidelines
+- Ask questions one at a time.
+- Provide 2–3 concrete options with trade-offs and recommendations.
+- Keep the user in the loop with transparent next steps and in-chat approval requests.
+""",
+        "valdoz-concept": """---
+name: valdoz-concept
+description: >-
+  Turn ideas into structured product concepts, user journeys, acceptance criteria, and prioritized feature scopes.
+---
+
+# ValdoZ Concept Playbook (Intake & Requirements)
 
 ## Objectives
-{instructions}
+1. Capture client/user brief verbatim into `docs/01-intake.md`. Extract open questions, risks, assumptions, and key stakeholders.
+2. Define functional and non-functional requirements, acceptance criteria, user personas, and an explicit out-of-scope boundary in `docs/02-requirements.md`.
 
 ## Permitted Command Whitelist
-{whitelist_str}
+`valdoz *`, `git status`, `git diff`
 
 ## Required Deliverables
-{deliverable_list}
+- `docs/01-intake.md`
+- `docs/02-requirements.md`
 
 ## Side-Effect Classification
-- Category: **{side_effect.category if side_effect else 'Local'}**
-- Reversibility: **{'Reversible' if side_effect and side_effect.reversible else 'IRREVERSIBLE'}**
+- Category: **Files only**
+- Reversibility: **Reversible**
 
 ## Operating Procedure
-1. Check phase status: `valdoz phase status` (or use `valdoz_get_status` tool)
-2. Formulate deliverables according to requirements.
-3. Pre-log any research intent: `valdoz research log --url <url> --claim <claim>`
-4. Present deliverables and summary of work to the human user in Antigravity chat.
-5. In Antigravity: Never tell the user to switch to a terminal or shell. Request human approval directly in chat using `valdoz_request_human_approval` or by asking the user to confirm in conversation.
-"""
+1. Check phase status: `valdoz phase status`
+2. Interview the user on product vision, target audience, core user journeys, and MVP boundaries.
+3. Formulate deliverables in `docs/01-intake.md` and `docs/02-requirements.md`.
+4. Present deliverables and summary of work to the human user in Antigravity chat. Request confirmation directly in chat.
+""",
+        "valdoz-design": """---
+name: valdoz-design
+description: >-
+  Redesign website/app UI/UX, overhaul visual styling, modern responsive layouts, design systems, and screen generation.
+---
+
+# ValdoZ Design Playbook (UI/UX & Aesthetics Overhaul)
+
+Use this playbook whenever you want to redesign an existing app or website, polish visual styling, create responsive layouts, or build a cohesive design system.
+
+## Objectives
+1. **Visual & UX Audit:** Evaluate current markup, CSS/Tailwind configs, typography scale, spacing rhythms, mobile responsiveness, and accessibility contrast.
+2. **Design Direction & Palettes:** Propose 2-3 modern aesthetic themes (e.g., sleek minimal SaaS, dark mode, high-contrast dashboard) with concrete color tokens and font pairings.
+3. **Mockups & Screen Generation:** Integrate with screen generators (Stitch MCP for layout generation, Canva for brand graphics, Generative UI for live previews).
+4. **Design Tokens & Component Kit:** Structure reusable UI components (buttons, cards, navigation, forms, modals) or import verified GitHub UI kits via `/valdoz-import`.
+5. **Implementation & Preview:** Update styles and components in tested design slices. Verify visually on dev server before merging.
+
+## Permitted Command Whitelist
+`valdoz *`, `git status`, `git diff`, `npm run dev`, `pnpm dev`, `vite`, `python -m http.server`
+
+## Side-Effect Classification
+- Category: **Files only / Styling**
+- Reversibility: **Reversible**
+
+## Operating Procedure
+1. Inspect existing UI structure and styling configs (`tailwind.config.*`, CSS files, component templates).
+2. Present visual proposals and mockups to the user in chat.
+3. Once approved, implement styling changes in isolated slices.
+4. Verify responsiveness and contrast. Present before-and-after walkthrough to the user.
+""",
+        "valdoz-architect": """---
+name: valdoz-architect
+description: >-
+  Choose tech stack, hosting providers (Vercel, AWS, Cloud Run, Supabase), database schemas, APIs, and system architecture.
+---
+
+# ValdoZ Architect Playbook (Tech Stack, Hosting & Architecture)
+
+## Objectives
+1. **Tech Stack Selection:** Compare 2-3 technology stacks against project requirements (frontend, backend, database, state management). Document decision in `docs/03-stack-decision.md`.
+2. **Hosting & Cloud Infrastructure:** Define hosting targets upfront (Vercel, Cloudflare, Supabase, Fly.io, Cloud Run, AWS). Define cost budgets, serverless vs container strategy, environment variables, and CDN/DNS setup.
+3. **System Architecture & Data Models:** Design system components, database schemas, API contracts (OpenAPI/REST/GraphQL), third-party integrations, and implementation slice roadmaps in `docs/04-architecture.md` and `docs/04-plan.md`.
+
+## Permitted Command Whitelist
+`valdoz *`, `git status`, `git diff`
+
+## Required Deliverables
+- `docs/03-stack-decision.md`
+- `docs/04-architecture.md`
+- `docs/04-plan.md`
+
+## Side-Effect Classification
+- Category: **Files only**
+- Reversibility: **Reversible**
+
+## Operating Procedure
+1. Check phase status: `valdoz phase status`
+2. Formulate tech stack, hosting blueprint, and system architecture.
+3. Present deliverables and summary of architectural decisions in chat.
+4. Request human approval directly in Antigravity chat.
+""",
+        "valdoz-setup": """---
+name: valdoz-setup
+description: >-
+  Initialize project structure, linters, test runner, Docker, hosting configs, and CI/CD pipelines.
+---
+
+# ValdoZ Setup Playbook (Project Tooling & CI/CD)
+
+## Objectives
+1. Initialize repository directory layout and package manifests (`pyproject.toml`, `package.json`, etc.).
+2. Set up code linters, formatters, typecheckers, and test runner.
+3. Configure deployment and container definitions (`Dockerfile`, `docker-compose.yml`, `fly.toml`, `vercel.json`).
+4. Create `.env.example` with required secret placeholders.
+5. Create CI pipeline workflow file (`.github/workflows/ci.yml`). Ensure baseline empty test suite passes.
+
+## Permitted Command Whitelist
+`valdoz *`, `git *`, `npm *`, `pnpm *`, `uv *`, `pip *`, `cargo *`
+
+## Side-Effect Classification
+- Category: **Config & Tooling**
+- Reversibility: **Reversible**
+""",
+        "valdoz-import": """---
+name: valdoz-import
+description: >-
+  Safely import, audit, and integrate any GitHub repo, UI component library, or template into the workspace.
+---
+
+# ValdoZ Import Playbook (GitHub Repo & Addon Integration)
+
+Use this playbook to safely import third-party GitHub repositories, UI design kits, starter templates, or community modules into your project.
+
+## Objectives
+1. **Clone & Inspect:** Clone the specified GitHub repository to a temporary inspection workspace.
+2. **Security & Safety Audit:**
+   - Scan for malicious install scripts, prompt injections, and hidden network telemetry.
+   - Scan for license compliance (flag restrictive GPL/AGPL copyleft when proprietary/MIT/Apache is required).
+   - Check secret leaks and dependency hygiene.
+3. **Safe Extraction & Integration:** Extract only the necessary UI components, stylesheets, or code modules into your project's folders.
+4. **Wiring & Dependency Configuration:** Install required runtime packages and update build configurations.
+5. **Provenance Logging:** Record the source repository URL, commit hash, license, and purpose into `.valdoz/decisions.jsonl`.
+
+## Permitted Command Whitelist
+`valdoz *`, `git clone`, `git status`, package manager install commands.
+
+## Side-Effect Classification
+- Category: **Files & Dependencies**
+- Reversibility: **Reversible**
+""",
+        "valdoz-build": """---
+name: valdoz-build
+description: >-
+  Implement features slice-by-slice with test-driven discipline, typechecks, and zero broken builds.
+---
+
+# ValdoZ Build Playbook (Slice Implementation)
+
+## Objectives
+1. Implement features incrementally in isolated, tested slices.
+2. For each slice, create `docs/slices/NN-name.md`, write automated tests first (TDD), implement the code, run typechecks and test suite.
+3. Mark slice completion with `valdoz slice done`.
+
+## Permitted Command Whitelist
+`valdoz *`, `git status`, `git diff`, test runners, linters, build tools.
+
+## Side-Effect Classification
+- Category: **Commits & Branches**
+- Reversibility: **Reversible**
+""",
+        "valdoz-verify": """---
+name: valdoz-verify
+description: >-
+  Execute comprehensive verification: unit/integration tests, security SAST scans, secret leak checks, and gate audits.
+---
+
+# ValdoZ Verify Playbook (Quality & Security Verification)
+
+## Objectives
+1. Execute full test suite (unit, integration, end-to-end) with test coverage thresholds.
+2. Run automated SAST scan (Semgrep), secrets detection, and lockfile integrity verification.
+3. Verify accessibility (WCAG), performance, and API contract drift.
+4. Compile verification report in `docs/07-verification.md`.
+
+## Permitted Command Whitelist
+`valdoz *`, `valdoz audit`, test runners, linters.
+
+## Required Deliverables
+- `docs/07-verification.md`
+
+## Side-Effect Classification
+- Category: **Test Artifacts**
+- Reversibility: **Reversible**
+""",
+        "valdoz-deploy": """---
+name: valdoz-deploy
+description: >-
+  Deploy and host application on staging or production cloud environments with DNS, SSL, and rollback strategy.
+---
+
+# ValdoZ Deploy Playbook (Staging & Production Deployment)
+
+## Objectives
+1. Prepare deployment runbook, environment secrets, and rollback strategy in `docs/08-deploy.md`.
+2. Deploy to staging environment, run live smoke tests, and verify endpoints.
+3. Request explicit human sign-off before deploying to live production cloud infrastructure.
+4. Verify custom domain, DNS records, SSL certificates, and health monitoring.
+
+## Permitted Command Whitelist
+`valdoz *`, deployment CLIs (`vercel`, `fly`, `aws`, `gcloud`, `docker`), `git push` to production branches.
+
+## Required Deliverables
+- `docs/08-deploy.md`
+
+## Side-Effect Classification
+- Category: **Live Infrastructure**
+- Reversibility: **IRREVERSIBLE** (Requires explicit human confirmation)
+""",
+        "valdoz-handover": """---
+name: valdoz-handover
+description: >-
+  Compile operational runbook, access transfer plan, client sign-off, and production handover.
+---
+
+# ValdoZ Handover Playbook (Project Delivery & Sign-Off)
+
+## Objectives
+1. Draft comprehensive operational runbook, monitoring links, disaster recovery steps, and access transfer plan in `docs/09-handover.md`.
+2. Transfer credentials and repository access to client/stakeholder.
+3. Obtain final client sign-off.
+
+## Required Deliverables
+- `docs/09-handover.md`
+
+## Side-Effect Classification
+- Category: **Access Transfer**
+- Reversibility: **IRREVERSIBLE**
+""",
+        "valdoz-changes": """---
+name: valdoz-changes
+description: >-
+  Plan and implement post-launch change requests, enhancements, or bug fixes with formal impact logs.
+---
+
+# ValdoZ Changes Playbook (Post-Launch Change Requests)
+
+## Objectives
+1. Intake change request or bug report, evaluate blast radius and backwards compatibility.
+2. Generate impact assessment in `docs/changes/CR-NNN.md`.
+3. Implement changes following slice discipline, verify with full test suite, and document update in `CHANGELOG.md`.
+
+## Permitted Command Whitelist
+`valdoz *`, `git *`
+
+## Side-Effect Classification
+- Category: **Production Changes**
+- Reversibility: **IRREVERSIBLE**
+""",
+    }
 
 
 def sync_all_runtimes(
@@ -210,13 +439,11 @@ def sync_all_runtimes(
         rel_path = f".agent/rules/{fname}"
         outputs[rel_path] = rcontent
 
-    # 4. .agent/skills/valdoz-phase-*/SKILL.md (Phases 1 to 10)
-    for p in range(1, 11):
-        name = PHASE_NAMES[p]
-        slug = name.lower().replace(" ", "-")
-        skill_path = f".agent/skills/valdoz-phase-{p}-{slug}/SKILL.md"
-        skill_content = generate_phase_playbook(p)
-        outputs[skill_path] = skill_content
+    # 4. Streamlined user-friendly skills: .agent/skills/valdoz-*/SKILL.md
+    streamlined_skills = generate_streamlined_skills()
+    for sname, scontent in streamlined_skills.items():
+        skill_path = f".agent/skills/{sname}/SKILL.md"
+        outputs[skill_path] = scontent
 
     # Validate character limits on all files
     for path_str, content in outputs.items():
@@ -227,9 +454,17 @@ def sync_all_runtimes(
 
     # Write files if not dry-run
     if not dry_run:
+        # Clean up legacy phase-numbered skill directories if present
+        skills_dir = project_root / ".agent" / "skills"
+        if skills_dir.exists():
+            for old_dir in skills_dir.glob("valdoz-phase-*"):
+                if old_dir.is_dir():
+                    shutil.rmtree(old_dir)
+
         for path_str, content in outputs.items():
             full_path = project_root / path_str
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(content, encoding="utf-8")
 
     return outputs
+

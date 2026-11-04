@@ -196,8 +196,21 @@ def verify_human_token(
     max_age_seconds: int = 300,
     project_root: Optional[Path] = None,
     burn: bool = False,
+    allow_global_fallback: bool = False,
 ) -> bool:
-    """Cryptographically verifies that an approval token is authentic, matching, unexpired, and unburned."""
+    """Cryptographically verifies that an approval token is authentic, matching, unexpired, and unburned.
+
+    Parameters:
+        token: The approval token string.
+        action: 'phase' or 'slice'.
+        target: Phase number or slice ID.
+        deliverables_hash: Optional composite hash of deliverables for TOCTOU binding.
+        max_age_seconds: Maximum allowed token age in seconds (TTL).
+        project_root: Repository root for project-scoped secret resolution.
+        burn: Whether to burn the nonce on successful verification.
+        allow_global_fallback: If True, falls back to the global keystore when project-scoped
+            verification fails. Defaults to False to prevent cross-project token portability.
+    """
     if not token:
         return False
 
@@ -234,7 +247,7 @@ def verify_human_token(
         expected_sig = hmac.new(secret, msg, hashlib.sha256).hexdigest()
         is_valid = hmac.compare_digest(tok_sig, expected_sig)
 
-        if not is_valid and project_root is not None:
+        if not is_valid and allow_global_fallback and project_root is not None:
             fallback_secret = get_approval_secret(None)
             fallback_expected = hmac.new(fallback_secret, msg, hashlib.sha256).hexdigest()
             is_valid = hmac.compare_digest(tok_sig, fallback_expected)
@@ -273,7 +286,7 @@ def verify_human_token(
         expected_sig = hmac.new(secret, msg, hashlib.sha256).hexdigest()
         is_valid = hmac.compare_digest(tok_sig, expected_sig)
 
-        if not is_valid and project_root is not None:
+        if not is_valid and allow_global_fallback and project_root is not None:
             fallback_secret = get_approval_secret(None)
             fallback_expected = hmac.new(fallback_secret, msg, hashlib.sha256).hexdigest()
             is_valid = hmac.compare_digest(tok_sig, fallback_expected)

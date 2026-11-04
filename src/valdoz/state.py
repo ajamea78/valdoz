@@ -147,18 +147,35 @@ def load_state(project_root: Path) -> ValdozState:
 
 
 def save_state(project_root: Path, state: ValdozState, write_protect: bool = False) -> None:
-    """Saves state.json safely, handling write-protection toggling."""
+    """Saves state.json safely and atomically, handling write-protection toggling."""
     state_path = get_state_path(project_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Serialize and validate round-trip before touching disk
+    dumped = state.model_dump()
+    raw_json = json.dumps(dumped, indent=2)
+    try:
+        roundtrip_data = json.loads(raw_json)
+        # Validate that roundtrip data can be reinstantiated
+        _ = ValdozState(**roundtrip_data)
+    except Exception as e:
+        raise StateError(f"State validation failed before save: {e}")
 
     # Unlock temporarily if locked
     was_protected = is_write_protected(state_path)
     if was_protected:
         set_write_protection(state_path, read_only=False)
 
+    tmp_path = state_path.with_suffix(".json.tmp")
     try:
-        state_path.write_text(json.dumps(state.model_dump(), indent=2), encoding="utf-8")
+        tmp_path.write_text(raw_json, encoding="utf-8")
+        os.replace(tmp_path, state_path)
     finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
         if write_protect or was_protected:
             set_write_protection(state_path, read_only=True)
 

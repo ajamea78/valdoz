@@ -6,7 +6,7 @@ from pathlib import Path
 from valdoz.sync import (
     sync_all_runtimes,
     inject_managed_block,
-    generate_phase_playbook,
+    generate_streamlined_skills,
     CharLimitExceededError,
     CHAR_LIMIT,
     DELIMITER_START,
@@ -48,12 +48,23 @@ def test_runtime_sync_all_files(temp_project: Path):
     assert (temp_project / ".agent" / "rules" / "01-concurrency-roles.md").exists()
     assert (temp_project / ".agent" / "rules" / "02-research-adversarial.md").exists()
 
-    # 2. Check all 10 phase playbooks exist
-    for p in range(1, 11):
-        skill_dirs = list((temp_project / ".agent" / "skills").glob(f"valdoz-phase-{p}-*"))
-        assert len(skill_dirs) == 1, f"Missing skill folder for Phase {p}"
-        skill_file = skill_dirs[0] / "SKILL.md"
-        assert skill_file.exists(), f"Missing SKILL.md for Phase {p}"
+    # 2. Check all streamlined playbooks exist
+    expected_skills = [
+        "valdoz-guide",
+        "valdoz-concept",
+        "valdoz-design",
+        "valdoz-architect",
+        "valdoz-setup",
+        "valdoz-import",
+        "valdoz-build",
+        "valdoz-verify",
+        "valdoz-deploy",
+        "valdoz-handover",
+        "valdoz-changes",
+    ]
+    for sname in expected_skills:
+        skill_file = temp_project / ".agent" / "skills" / sname / "SKILL.md"
+        assert skill_file.exists(), f"Missing SKILL.md for {sname}"
 
         # Validate YAML frontmatter
         content = skill_file.read_text(encoding="utf-8")
@@ -61,9 +72,8 @@ def test_runtime_sync_all_files(temp_project: Path):
         parts = content.split("---", 2)
         assert len(parts) >= 3
         fm = yaml.safe_load(parts[1])
-        assert "name" in fm
+        assert fm["name"] == sname
         assert "description" in fm
-        assert fm["name"].startswith(f"valdoz-phase-{p}-")
 
 
 def test_size_limits_under_12k_chars(temp_project: Path):

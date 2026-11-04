@@ -18,6 +18,7 @@ import shutil
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import unicodedata
 import yaml
 
 from valdoz.packs import (
@@ -40,11 +41,34 @@ PROMPT_INJECTION_PATTERNS = [
 ]
 
 
+# Common Cyrillic & Greek homoglyphs mapped to ASCII equivalents
+HOMOGLYPH_MAP = str.maketrans({
+    "а": "a", "с": "c", "е": "e", "і": "i", "ј": "j", "о": "o", "р": "p", "ѕ": "s", "у": "y", "х": "x",
+    "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "І": "I", "Ј": "J", "К": "K", "М": "M", "О": "O",
+    "Р": "P", "Ѕ": "S", "Т": "T", "Х": "X", "Ү": "Y",
+    "α": "a", "ο": "o", "ν": "v", "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
+})
+ZERO_WIDTH_PATTERN = re.compile(r"[\u200B-\u200D\uFEFF\u00AD\u2060]")
+
+
+def normalize_text_for_security(text: str) -> str:
+    """Normalizes Unicode characters, strips zero-width spaces, and maps common homoglyphs."""
+    # 1. Strip zero-width and invisible characters
+    cleaned = ZERO_WIDTH_PATTERN.sub("", text)
+    # 2. Map Cyrillic/Greek homoglyphs
+    cleaned = cleaned.translate(HOMOGLYPH_MAP)
+    # 3. Unicode NFKD normalization
+    normalized = unicodedata.normalize("NFKD", cleaned)
+    return normalized
+
+
 def scan_prompt_injection_patterns(text: str) -> List[str]:
     """Scans text for adversarial prompt injection directives or malicious wrappers."""
     findings: List[str] = []
+    # Test both raw text and normalized text
+    normalized = normalize_text_for_security(text)
     for pat, desc in PROMPT_INJECTION_PATTERNS:
-        if pat.search(text):
+        if pat.search(text) or pat.search(normalized):
             findings.append(desc)
     return findings
 

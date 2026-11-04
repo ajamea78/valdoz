@@ -32,8 +32,9 @@ from valdoz.state import load_state
 SECRET_PATTERNS = [
     (re.compile(r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP)? PRIVATE KEY-----"), "Private Key"),
     (re.compile(r"\b(AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}\b"), "AWS Access Key ID"),
-    (re.compile(r"\bghp_[0-9a-zA-Z]{36}\b"), "GitHub Personal Access Token"),
-    (re.compile(r"\bsk-[a-zA-Z0-9]{20,}\b"), "OpenAI API Secret Key"),
+    (re.compile(r"\b(gh[pousr]_[0-9a-zA-Z]{36,}|github_pat_[0-9a-zA-Z_]{50,})\b"), "GitHub Personal Access Token"),
+    (re.compile(r"\b(sk-[a-zA-Z0-9_\-]{20,}|sk-ant-[a-zA-Z0-9_\-]{20,})\b"), "OpenAI/Anthropic API Secret Key"),
+    (re.compile(r"\bAIza[0-9A-Za-z-_]{35}\b"), "Gemini/Google API Key"),
     (re.compile(r"\beyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*\b"), "JWT Token"),
 ]
 
@@ -168,8 +169,12 @@ def scan_secrets(project_root: Path) -> AuditCheckResult:
         if mode not in (0o600, 0o400):
             violations.append(f"Insecure permissions on '.valdoz/.git-credentials' ({oct(mode)}). Must be chmod 600.")
 
-    # Walk files in project excluding virtual environments, node_modules, and ignored .env
-    skip_dirs = {".git", ".venv", "node_modules", "dist", "build", ".valdoz-archive", ".pytest_cache"}
+    # Walk files in project excluding virtual environments, node_modules, and .valdoz directory
+    skip_dirs = {".git", ".venv", "node_modules", "dist", "build", ".valdoz", ".valdoz-archive", ".pytest_cache"}
+    secret_extensions = (
+        ".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".md",
+        ".env", ".toml", ".sh", ".cfg", ".ini",
+    )
     for p in project_root.rglob("*"):
         if any(part in p.parts for part in skip_dirs):
             continue
@@ -177,7 +182,7 @@ def scan_secrets(project_root: Path) -> AuditCheckResult:
             continue
         if vault_is_safely_ignored and p == vault_file:
             continue
-        if p.is_file() and p.suffix in (".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".md", ".env"):
+        if p.is_file() and p.suffix in secret_extensions:
             try:
                 text = p.read_text(encoding="utf-8", errors="ignore")
                 for pat, label in SECRET_PATTERNS:

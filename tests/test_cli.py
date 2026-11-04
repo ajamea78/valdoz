@@ -116,7 +116,8 @@ def test_cli_sync_runtimes(run_in_tmp: Path):
     assert "Successfully synchronized" in res_sync.output
     assert (run_in_tmp / "AGENTS.md").exists()
     assert (run_in_tmp / "GEMINI.md").exists()
-    assert (run_in_tmp / ".agent" / "skills" / "valdoz-phase-1-intake" / "SKILL.md").exists()
+    assert (run_in_tmp / ".agent" / "skills" / "valdoz-concept" / "SKILL.md").exists()
+    assert (run_in_tmp / ".agent" / "skills" / "valdoz-design" / "SKILL.md").exists()
 
 
 def test_cli_gate_check(run_in_tmp: Path):
