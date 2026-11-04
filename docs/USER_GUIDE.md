@@ -561,6 +561,26 @@ This writes the tool configuration to `~/.gemini/config/mcp_config.json`. Antigr
 - `valdoz_approve_with_human_token`: Submits cryptographically verified human token to approve phases.
 - `valdoz_heal`: Triggers autonomous AI diagnosis and remediation for failed gates, audits, slices, or CI.
 
+### Streamlined Antigravity Slash Command Suite
+
+When typing `/valdoz` in Antigravity chat, ValdoZ provides intent-driven, human-friendly slash commands that replace legacy phase-numbered menus with clear developer actions:
+
+| Slash Command | Purpose & Guru Behavior |
+| :--- | :--- |
+| **`/valdoz-guide`** | **End-to-End Guru Companion:** Guides you step-by-step from raw idea to live product across web, mobile, and APIs with best practices. |
+| **`/valdoz-concept`** | **Concept & Requirements (Phases 1 & 2):** Captures the initial brief, target audience, user stories, and acceptance criteria. |
+| **`/valdoz-design`** | **UI/UX & Aesthetics Overhaul:** Redesigns existing apps/sites, updates styling, audits color contrast & typography, and integrates with screen generators (Stitch MCP / Canva). |
+| **`/valdoz-architect`** | **Tech Stack & Hosting Architecture (Phases 3 & 4):** Evaluates frameworks, defines hosting targets (Vercel, Cloud Run, AWS, Supabase), and designs DB/API schemas. |
+| **`/valdoz-setup`** | **Tooling & Setup (Phase 5):** Scaffolds linters, formatters, test runner, Docker definitions, hosting configs, and CI/CD pipelines. |
+| **`/valdoz-import`** | **GitHub Repo & Addon Importer:** Clones, security-audits, and safely extracts UI kits or community libraries into the workspace. |
+| **`/valdoz-build`** | **TDD Slice Implementation (Phase 6):** Builds features slice-by-slice with test-driven discipline and zero broken builds. |
+| **`/valdoz-verify`** | **QA & Security Verification (Phase 7):** Runs test suites, Semgrep SAST scans, secrets detection, and quality gates. |
+| **`/valdoz-deploy`** | **Cloud Deployment (Phase 8):** Deploys to staging or production with DNS, SSL, and rollback procedures. |
+| **`/valdoz-handover`** | **Project Handover (Phase 9):** Compiles operational runbooks, credential transfer plans, and client sign-off. |
+| **`/valdoz-changes`** | **Post-Launch Evolution (Phase 10):** Evaluates blast radius and executes post-handover change requests safely. |
+| **`/valdoz-heal`** | **Autonomous Self-Healing:** Diagnoses and remediates broken tests, failed gates, or build errors. |
+| **`/valdoz-status`** | **Delivery Dashboard:** Displays current project milestone progress and deliverable status. |
+
 ### The In-Chat Human Approval Bridge & Deliverables Binding (`valdoz-v2`)
 Historically, gates required an interactive terminal (`sys.stdin.isatty()`) to prevent automated AI self-approval. 
 

@@ -5,6 +5,43 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-11-04
+
+### Security Hardening & Bug Fixes
+- **Atomic State Persistence & Round-Trip Validation (`src/valdoz/state.py`)**:
+  - Implemented atomic file writes via `.json.tmp` and `os.replace` to prevent corruption if process exits mid-save.
+  - Added schema round-trip deserialization guard before flushing state changes to disk.
+- **Unified Broad Secret Scanner & Multi-File Coverage (`src/valdoz/checks.py`)**:
+  - Broadened GitHub token detection regex to catch fine-grained PATs (`github_pat_`), app tokens (`ghs_`, `ghu_`), and variable-length tokens.
+  - Added support for `.toml`, `.sh`, `.cfg`, and `.ini` files in secrets scan.
+  - Added `.valdoz` directory to directory exclusion list to isolate credential vault verification from source tree scanning.
+- **Approval Keystore Isolation & Fallback Opt-In (`src/valdoz/approval.py`)**:
+  - Parameterized global keystore fallback via `allow_global_fallback` (defaulting to `False`) to prevent cross-project token reuse.
+- **Adversarial Prompt Injection Hardening (`src/valdoz/importer.py`)**:
+  - Integrated Unicode NFKD normalization, zero-width space removal (`[\u200B-\u200D\uFEFF\u00AD\u2060]`), and Cyrillic/Greek homoglyph transliteration to defeat evasion attacks.
+- **State Repair Legacy Hash Warning (`src/valdoz/repair.py`)**:
+  - Added explicit notice logging when restoring phases recorded with legacy short hashes.
+
+### Added
+- **Streamlined Intent-Driven Slash Command Suite**:
+  - Replaced legacy numbered phase playbooks (`valdoz-phase-X-...`) in Antigravity chat with human-friendly, task-oriented slash commands.
+  - Added `/valdoz-guide`: End-to-end guru companion guiding delivery from raw concept to live deployment with best practices for web, mobile, and APIs.
+  - Added `/valdoz-concept`: Unified product intake and requirements discovery (Phases 1 & 2).
+  - Added `/valdoz-design`: First-class UI/UX redesign and styling overhaul skill integrating with screen generators (Stitch MCP / Canva) and component kits.
+  - Added `/valdoz-architect`: Unified tech stack selection, hosting infrastructure strategy (Vercel, Cloud Run, AWS, Supabase), and API/DB schema architecture (Phases 3 & 4).
+  - Added `/valdoz-import`: Third-party GitHub repository and UI component importer with security scanning, license verification, and provenance logging.
+  - Added `/valdoz-setup`: Tooling, Docker, container configurations, and CI/CD pipeline scaffolding (Phase 5).
+  - Added `/valdoz-build`: Test-driven feature slice implementation (Phase 6).
+  - Added `/valdoz-verify`: Automated test suites, Semgrep SAST, secrets detection, and quality gate audits (Phase 7).
+  - Added `/valdoz-deploy`: Safe cloud staging and production deployment with DNS and rollback strategies (Phase 8).
+  - Added `/valdoz-handover`: Operational runbooks, credential handover, and client sign-off (Phase 9).
+  - Added `/valdoz-changes`: Post-handover change request impact assessments and tracking (Phase 10).
+- **Runtime Sync Engine Upgrade (`src/valdoz/sync.py`)**:
+  - Automated generation of streamlined `.agent/skills/valdoz-*/SKILL.md` with standard YAML frontmatter.
+  - Automated cleanup of obsolete legacy `valdoz-phase-*` directories during synchronization.
+- **Documentation**:
+  - Added full reference for the streamlined slash command suite in `docs/USER_GUIDE.md`.
+
 ## [3.1.2] - 2026-10-27
 
 ### Security Hardening & Bug Fixes
