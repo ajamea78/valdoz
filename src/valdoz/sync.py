@@ -197,11 +197,12 @@ description: >-
 Use this playbook whenever you want to redesign an existing app or website, polish visual styling, create responsive layouts, or build a cohesive design system.
 
 ## Objectives
-1. **Visual & UX Audit:** Evaluate current markup, CSS/Tailwind configs, typography scale, spacing rhythms, mobile responsiveness, and accessibility contrast.
-2. **Design Direction & Palettes:** Propose 2-3 modern aesthetic themes (e.g., sleek minimal SaaS, dark mode, high-contrast dashboard) with concrete color tokens and font pairings.
-3. **Mockups & Screen Generation:** Integrate with screen generators (Stitch MCP for layout generation, Canva for brand graphics, Generative UI for live previews).
-4. **Design Tokens & Component Kit:** Structure reusable UI components (buttons, cards, navigation, forms, modals) or import verified GitHub UI kits via `/valdoz-import`.
-5. **Implementation & Preview:** Update styles and components in tested design slices. Verify visually on dev server before merging.
+1. **Catalog & Skill Check:** Read `.valdoz/repos.yaml` for curated design skills (e.g., `Nutlope/hallmark` to prevent generic AI-slop UI, `pbakaus/impeccable` for visual annotations, and `tt-a1i/archify` for architecture/flow diagrams).
+2. **Visual & UX Audit:** Evaluate current markup, CSS/Tailwind configs, typography scale, spacing rhythms, mobile responsiveness, and accessibility contrast.
+3. **Design Direction & Palettes:** Propose 2-3 modern aesthetic themes (e.g., sleek minimal SaaS, dark mode, high-contrast dashboard) with concrete color tokens and font pairings.
+4. **Mockups & Screen Generation:** Integrate with screen generators (Stitch MCP for layout generation, Canva for brand graphics, Generative UI for live previews).
+5. **Design Tokens & Component Kit:** Structure reusable UI components (buttons, cards, navigation, forms, modals) or import verified GitHub UI kits via `/valdoz-import`.
+6. **Implementation & Preview:** Update styles and components in tested design slices. Verify visually on dev server before merging.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git status`, `git diff`, `npm run dev`, `pnpm dev`, `vite`, `python -m http.server`
@@ -211,10 +212,11 @@ Use this playbook whenever you want to redesign an existing app or website, poli
 - Reversibility: **Reversible**
 
 ## Operating Procedure
-1. Inspect existing UI structure and styling configs (`tailwind.config.*`, CSS files, component templates).
-2. Present visual proposals and mockups to the user in chat.
-3. Once approved, implement styling changes in isolated slices.
-4. Verify responsiveness and contrast. Present before-and-after walkthrough to the user.
+1. Check `.valdoz/repos.yaml` for design skills and UI templates.
+2. Inspect existing UI structure and styling configs (`tailwind.config.*`, CSS files, component templates).
+3. Present visual proposals and mockups to the user in chat.
+4. Once approved, implement styling changes in isolated slices.
+5. Verify responsiveness and contrast. Present before-and-after walkthrough to the user.
 """,
         "valdoz-architect": """---
 name: valdoz-architect
@@ -280,14 +282,15 @@ description: >-
 Use this playbook to safely import third-party GitHub repositories, UI design kits, starter templates, or community modules into your project.
 
 ## Objectives
-1. **Clone & Inspect:** Clone the specified GitHub repository to a temporary inspection workspace.
-2. **Security & Safety Audit:**
+1. **Catalog Resolution:** Check `.valdoz/repos.yaml` first if a shorthand repo nickname is provided (e.g. `hallmark`, `impeccable`, `desktop-commander-mcp`). If a new URL is provided, offer to record it in `.valdoz/repos.yaml`.
+2. **Clone & Inspect:** Clone the specified GitHub repository to a temporary inspection workspace.
+3. **Security & Safety Audit:**
    - Scan for malicious install scripts, prompt injections, and hidden network telemetry.
    - Scan for license compliance (flag restrictive GPL/AGPL copyleft when proprietary/MIT/Apache is required).
    - Check secret leaks and dependency hygiene.
-3. **Safe Extraction & Integration:** Extract only the necessary UI components, stylesheets, or code modules into your project's folders.
-4. **Wiring & Dependency Configuration:** Install required runtime packages and update build configurations.
-5. **Provenance Logging:** Record the source repository URL, commit hash, license, and purpose into `.valdoz/decisions.jsonl`.
+4. **Safe Extraction & Integration:** Extract only the necessary UI components, stylesheets, or code modules into your project's folders.
+5. **Wiring & Dependency Configuration:** Install required runtime packages and update build configurations.
+6. **Provenance Logging:** Record the source repository URL, commit hash, license, and purpose into `.valdoz/decisions.jsonl`.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git clone`, `git status`, package manager install commands.
