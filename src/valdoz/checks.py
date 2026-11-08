@@ -1654,6 +1654,83 @@ def scan_doc_sync(project_root: Path) -> AuditCheckResult:
     )
 
 
+def scan_monorepo_verification_integrity(project_root: Path) -> AuditCheckResult:
+    """Verifies that workspaces and multi-package repositories have unified verification.
+
+    Checks:
+    1. If multiple workspace packages exist, warns if root package.json lacks a unified 'verify' script.
+    2. Flags any Node subpackages that lack a 'lint' script (to prevent bundlers swallowing undeclared identifiers).
+    """
+    from valdoz.verification import discover_workspace_packages
+
+    packages = discover_workspace_packages(project_root, max_depth=2)
+    if len(packages) <= 1:
+        # Single-package or zero-package repository
+        if packages and packages[0].ecosystem == "node":
+            if "lint" not in packages[0].scripts:
+                return AuditCheckResult(
+                    id="monorepo-verification-integrity",
+                    name="Monorepo & Workspace Verification Integrity",
+                    severity="warning",
+                    status="ran",
+                    passed=False,
+                    message="Package manifest lacks a 'lint' script. Linters (e.g. ESLint) are essential to catch undeclared variables before runtime.",
+                )
+        return AuditCheckResult(
+            id="monorepo-verification-integrity",
+            name="Monorepo & Workspace Verification Integrity",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message="Single-package verification configuration valid.",
+        )
+
+    # Multi-package / Monorepo setup
+    issues = []
+    root_pkg_json = project_root / "package.json"
+    has_root_verify = False
+    if root_pkg_json.is_file():
+        try:
+            data = json.loads(root_pkg_json.read_text(encoding="utf-8"))
+            has_root_verify = "verify" in data.get("scripts", {})
+        except Exception:
+            pass
+
+    if not has_root_verify:
+        pkg_names = [p.rel_path for p in packages if p.rel_path != "."]
+        issues.append(
+            f"Multi-package repository detected ({len(packages)} packages: {', '.join(pkg_names)}) without a unified root 'verify' script. Add 'verify' to root package.json to test & lint all workspaces in a single command."
+        )
+
+    # Check each subpackage for lint script
+    for p in packages:
+        if p.rel_path == "." and has_root_verify:
+            continue
+        if p.ecosystem == "node" and "lint" not in p.scripts:
+            issues.append(
+                f"Subproject '{p.rel_path}' lacks a 'lint' script. Linters are required to detect undeclared variables."
+            )
+
+    if issues:
+        return AuditCheckResult(
+            id="monorepo-verification-integrity",
+            name="Monorepo & Workspace Verification Integrity",
+            severity="warning",
+            status="ran",
+            passed=False,
+            message="; ".join(issues),
+        )
+
+    return AuditCheckResult(
+        id="monorepo-verification-integrity",
+        name="Monorepo & Workspace Verification Integrity",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"Monorepo verification integrity verified across {len(packages)} workspace packages.",
+    )
+
+
 def run_valdoz_audit(
     project_root: Path,
     strict: bool = False,
@@ -1747,6 +1824,7 @@ def run_valdoz_audit(
         "api-contract-drift": scan_api_contract_drift,
         "container-hardening": scan_container_hardening,
         "iac-hardening": scan_container_hardening,
+        "monorepo-verification-integrity": scan_monorepo_verification_integrity,
     }
 
     for chk in configured_checks:

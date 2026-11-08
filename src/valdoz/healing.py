@@ -326,46 +326,11 @@ def verify_after_patch(project_root: Path, ctx: HealingContext) -> bool:
         gate_rep = run_phase_gate_checks(project_root, phase_num=ctx.phase_num)
         return gate_rep.passed
     elif ctx.failure_type in ("slice_gate", "slice_test"):
-        # Run local test suite (e.g. pytest or npm test)
+        # Run full-spectrum project verification (monorepo packages, lint, typecheck, test, build)
         try:
-            has_pyproject = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
-            has_package_json = (project_root / "package.json").exists()
-            tests_dir = project_root / "tests"
-
-            if has_pyproject:
-                res = subprocess.run(
-                    [sys.executable, "-m", "pytest", "-q"],
-                    cwd=project_root,
-                    capture_output=True,
-                    check=False,
-                )
-                return res.returncode == 0
-            elif has_package_json:
-                res = subprocess.run(
-                    ["npm", "test"],
-                    cwd=project_root,
-                    capture_output=True,
-                    check=False,
-                )
-                return res.returncode == 0
-            elif tests_dir.exists() and tests_dir.is_dir():
-                py_files = list(tests_dir.glob("**/*.py"))
-                if py_files:
-                    res = subprocess.run(
-                        [sys.executable, "-m", "pytest", "-q"],
-                        cwd=project_root,
-                        capture_output=True,
-                        check=False,
-                    )
-                    return res.returncode == 0
-                else:
-                    res = subprocess.run(
-                        ["npm", "test"],
-                        cwd=project_root,
-                        capture_output=True,
-                        check=False,
-                    )
-                    return res.returncode == 0
+            from valdoz.verification import run_project_verification
+            rep = run_project_verification(project_root)
+            return rep.passed
         except Exception:
             return False
     return True

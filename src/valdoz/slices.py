@@ -170,36 +170,31 @@ def start_slice(project_root: Path, slice_id: str) -> SliceState:
 
 
 def run_slice_test_suite(project_root: Path) -> Tuple[bool, str]:
-    """Runs the project's automated test suite (pytest or npm test) and returns (passed, trace)."""
-    has_pyproject = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
-    has_package_json = (project_root / "package.json").exists()
-    tests_dir = project_root / "tests"
+    """Runs full-spectrum verification across the workspace (lint, typecheck, test, build).
+
+    Enforces that subprojects (e.g. staff-interface, customer-portal) and linters
+    cannot be bypassed. If root defines 'verify', runs that; otherwise traverses all packages.
+    """
+    from valdoz.verification import run_project_verification
 
     try:
-        if has_pyproject or (tests_dir.exists() and list(tests_dir.glob("**/*.py"))):
-            res = subprocess.run(
-                [sys.executable, "-m", "pytest", "-q"],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            output = (res.stdout + "\n" + res.stderr).strip()
-            return res.returncode == 0, output
-        elif has_package_json:
-            res = subprocess.run(
-                ["npm", "test"],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            output = (res.stdout + "\n" + res.stderr).strip()
-            return res.returncode == 0, output
-        else:
-            return True, "No automated test suite detected."
+        report = run_project_verification(project_root)
+        if not report.passed:
+            failed_outputs = []
+            for step in report.steps:
+                if not step.passed:
+                    failed_outputs.append(
+                        f"[{step.package}:{step.step}] Command: {' '.join(step.command)}\n{step.output}"
+                    )
+            trace = "\n\n".join(failed_outputs)
+            return False, f"Automated verification failed:\n{trace}"
+
+        if not report.steps:
+            return True, "No automated test or verification suite detected across packages."
+
+        return True, report.summary
     except Exception as e:
-        return False, f"Test runner execution error: {e}"
+        return False, f"Verification runner execution error: {e}"
 
 
 def done_slice(

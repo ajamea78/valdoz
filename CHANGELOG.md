@@ -5,6 +5,36 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-11-06
+
+### Added
+- **Full-Spectrum Non-Bypassable Verification Engine (`src/valdoz/verification.py`)**:
+  - Implemented multi-package workspace discovery that automatically traverses root and nested subprojects (e.g. `staff-interface/`, `customer-portal/`, `client/`, `server/`).
+  - Executes authoritative root `npm run verify` if present; otherwise runs the 4-pillar verification matrix across every workspace:
+    1. **Lint Phase**: `npm run lint`, `ruff check`, `cargo clippy`.
+    2. **Typecheck Phase**: `npm run typecheck`, `npx tsc --noEmit`, `mypy`.
+    3. **Test Phase**: `npm test`, `pytest`, `cargo test`.
+    4. **Build Phase**: `npm run build`, `cargo build`.
+  - Added `valdoz verify` CLI command with Rich status matrices, execution times, and captured failure panels.
+  - Added `valdoz_verify_project` native MCP server tool for automated agent verification calls.
+- **Hardened Directive 9 in Core Directives (`AGENTS.md`, `GEMINI.md`, `00-core-discipline.md`)**:
+  - Upgraded Directive 9 to **Full-Spectrum Non-Bypassable Verification**:
+    - Mandates running all 4 pillars across both root and all workspace subprojects before declaring any task "done" or requesting approval.
+    - Explicitly codified the "Bundler Pass $\neq$ Code Works" rule: production bundlers (`vite build`) transpile syntax but do not catch undeclared variables; linters (`npm run lint`, ESLint `no-undef`) must run explicitly.
+- **UI & Perceptual Stability Directive (Directive 9 & Playbooks)**:
+  - Updated Directive 9 across `AGENTS.md`, `GEMINI.md`, and `.agent/rules/00-core-discipline.md` with explicit **UI & Perceptual Guard**: automated passes verify code logic but cannot detect visual layout shifts (CLS), unmounting layout shells, or mounting flickers.
+  - Banished the "Early-Return Skeleton Trap" (`if (loading) return <Skeleton />`) across `valdoz-design`, `valdoz-build`, and `valdoz-verify`: mandates persistent layout frames (headers, navigation, actions remain mounted) and confines skeletons strictly to inner data containers.
+  - Mandated cache-first / SWR state persistence across page transitions so tab switching does not trigger flashing loading states.
+  - Added frontend perceptual verification checklist to `valdoz-verify` and `valdoz-design` playbooks.
+- **Slice Gate Hardening (`src/valdoz/slices.py`)**:
+  - `run_slice_test_suite` now invokes full-spectrum workspace verification.
+  - Subproject lint failures (such as undeclared JSX identifiers like `isDir2`) automatically block slice advancement to `gated`.
+- **Monorepo Verification Integrity Audit Check (`src/valdoz/checks.py`, `src/valdoz/packs.py`)**:
+  - Added `monorepo-verification-integrity` to the Base Pack.
+  - Verifies that multi-package repositories define a unified root `verify` script and that all subprojects have active linters configured.
+- **External Catalog Reference Additions (`.valdoz/repos.yaml`)**:
+  - Added industry-standard verification references: `vercel/turborepo` (monorepo pipelines), `biomejs/biome` and `oxc-project/oxc` (instant AST semantic linting), `microsoft/playwright` (headless UI smoke testing to prevent blank screens), and `paul-gauthier/aider` (pre-commit verification loops).
+
 ## [3.2.0] - 2026-11-04
 
 ### Security Hardening & Bug Fixes
@@ -23,6 +53,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added explicit notice logging when restoring phases recorded with legacy short hashes.
 
 ### Added
+- **Autonomous Conversational Governance (Rule 12)**:
+  - Once a project initializes ValdoZ, the agent automatically manages and structures all natural conversation requests under ValdoZ protocol discipline.
+  - The user no longer needs to prefix prompts with `/valdoz` or call slash commands for routine work:
+    - Visual/UI requests automatically route to `/valdoz-design`.
+    - Features, enhancements, and fixes automatically route to test-driven slices (`/valdoz-build`).
+    - Architecture, database, and stack requests route to `/valdoz-architect`.
+    - Quality and audit checks route to `/valdoz-verify` and `/valdoz-audit`.
+    - Deployments route to `/valdoz-deploy` with mandatory in-chat human sign-off.
+- **Machine-Wide Skill Synchronization & Legacy Purge**:
+  - Fully populated `~/.gemini/config/skills/` with the complete streamlined ValdoZ command suite.
+  - Automatically scanned and purged obsolete `valdoz-phase-*` directories across all existing projects on the machine (`GoCar Auto`, `MeemEvents`, `Smart Directory`, `Dania`, `Dental Management System`, `AI News Dashboard`).
 - **Streamlined Intent-Driven Slash Command Suite**:
   - Replaced legacy numbered phase playbooks (`valdoz-phase-X-...`) in Antigravity chat with human-friendly, task-oriented slash commands.
   - Added `/valdoz-guide`: End-to-end guru companion guiding delivery from raw concept to live deployment with best practices for web, mobile, and APIs.

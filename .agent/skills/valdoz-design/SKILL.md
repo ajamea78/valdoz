@@ -15,6 +15,7 @@ Use this playbook whenever you want to redesign an existing app or website, poli
 4. **Mockups & Screen Generation:** Integrate with screen generators (Stitch MCP for layout generation, Canva for brand graphics, Generative UI for live previews).
 5. **Design Tokens & Component Kit:** Structure reusable UI components (buttons, cards, navigation, forms, modals) or import verified GitHub UI kits via `/valdoz-import`.
 6. **Implementation & Preview:** Update styles and components in tested design slices. Verify visually on dev server before merging.
+7. **Perceptual Stability & Anti-Flicker:** Ban the early-return skeleton anti-pattern (`if (loading) return <Skeleton />`) that destroys page headers and triggers layout shifts; mandate persistent frames and cache-first/SWR state persistence across page transitions.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git status`, `git diff`, `npm run dev`, `pnpm dev`, `vite`, `python -m http.server`

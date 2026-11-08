@@ -81,6 +81,30 @@ VALDOZ_TOOLS = [
         },
     },
     {
+        "name": "valdoz_verify_project",
+        "description": "Run full-spectrum verification across the repository and all workspace subprojects (lint, typecheck, test, build).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "subprojects": {
+                    "type": "boolean",
+                    "description": "Traverse workspace subprojects (e.g. staff-interface, customer-portal).",
+                    "default": True,
+                },
+                "builds": {
+                    "type": "boolean",
+                    "description": "Execute production build scripts.",
+                    "default": True,
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in seconds per command.",
+                    "default": 120,
+                },
+            },
+        },
+    },
+    {
         "name": "valdoz_check_gates",
         "description": "Verify deliverables, required headings, and absence of placeholders for current phase.",
         "inputSchema": {
@@ -273,6 +297,28 @@ def handle_run_audit(
     }
 
 
+def handle_verify_project(
+    root: Path,
+    subprojects: bool = True,
+    builds: bool = True,
+    timeout: int = 120,
+) -> Dict[str, Any]:
+    from valdoz.verification import run_project_verification
+    report = run_project_verification(
+        root,
+        include_subprojects=subprojects,
+        run_builds=builds,
+        timeout=timeout,
+    )
+    return {
+        "passed": report.passed,
+        "used_root_verify": report.used_root_verify,
+        "packages_checked": report.packages_checked,
+        "summary": report.summary,
+        "steps": [s.model_dump() for s in report.steps],
+    }
+
+
 def handle_check_gates(root: Path, phase_num: Optional[int] = None) -> Dict[str, Any]:
     report = run_phase_gate_checks(root, phase_num=phase_num)
     return {
@@ -444,6 +490,13 @@ def dispatch_tool(tool_name: str, arguments: Dict[str, Any], root: Path) -> Dict
             licenses=arguments.get("licenses", False),
             contract=arguments.get("contract", False),
             containers=arguments.get("containers", False),
+        )
+    elif tool_name == "valdoz_verify_project":
+        return handle_verify_project(
+            root,
+            subprojects=arguments.get("subprojects", True),
+            builds=arguments.get("builds", True),
+            timeout=arguments.get("timeout", 120),
         )
     elif tool_name == "valdoz_check_gates":
         return handle_check_gates(root, phase_num=arguments.get("phase_num"))

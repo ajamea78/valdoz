@@ -6,6 +6,8 @@ __pycache__/
 *.pyo
 **/*.pyo
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
@@ -13,6 +15,9 @@ site/
 .valdoz/
 .coverage
 coverage.xml
+coverage.json
+valdoz-audit-report.json
+audit-export/
 *.7z
 *.zip
 *.tar.gz

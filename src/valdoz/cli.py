@@ -966,6 +966,64 @@ def audit_cmd(
         raise typer.Exit(1)
 
 
+@app.command("verify")
+def verify_cmd(
+    subprojects: bool = typer.Option(True, "--subprojects/--no-subprojects", help="Traverse workspace subprojects (e.g. staff-interface, customer-portal)"),
+    builds: bool = typer.Option(True, "--builds/--no-builds", help="Execute production build scripts"),
+    timeout: int = typer.Option(120, "--timeout", "-t", help="Timeout in seconds per command"),
+):
+    """Executes full-spectrum verification (lint, typecheck, test, build across workspaces)."""
+    from valdoz.verification import run_project_verification
+    root = find_project_root()
+
+    console.print(f"[bold cyan]🔍 Executing ValdoZ Full-Spectrum Verification...[/bold cyan]")
+    report = run_project_verification(
+        root,
+        include_subprojects=subprojects,
+        run_builds=builds,
+        timeout=timeout,
+    )
+
+    if report.used_root_verify:
+        console.print("[dim]Using authoritative root 'npm run verify' script.[/dim]\n")
+    else:
+        console.print(f"[dim]Discovered and checked {len(report.packages_checked)} package(s): {', '.join(report.packages_checked)}[/dim]\n")
+
+    if not report.steps:
+        console.print(f"[yellow]{report.summary}[/yellow]")
+        return
+
+    table = Table(title="Full-Spectrum Verification Matrix")
+    table.add_column("Package", style="cyan")
+    table.add_column("Pillar / Step", style="bold")
+    table.add_column("Command")
+    table.add_column("Result", justify="center")
+    table.add_column("Time", justify="right")
+
+    for s in report.steps:
+        status_str = "[bold green]PASS[/bold green]" if s.passed else "[bold red]FAIL[/bold red]"
+        table.add_row(
+            s.package,
+            s.step.upper(),
+            " ".join(s.command),
+            status_str,
+            f"{s.duration_seconds:.2f}s",
+        )
+
+    console.print(table)
+
+    if not report.passed:
+        console.print("\n[bold red]── Verification Failures ──────────────────────────[/bold red]")
+        for s in report.steps:
+            if not s.passed:
+                panel_title = f"Failed Step: {s.package} ({s.step}) - Exit Code: {s.returncode}"
+                console.print(Panel(s.output or "No output captured", title=panel_title, border_style="red"))
+        console.print(f"\n[bold red]{report.summary}[/bold red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold green]{report.summary}[/bold green]")
+
+
 @app.command("anchor")
 def anchor_cmd():
     """Anchors current audit trail head hash to .valdoz/anchor.json and Git tag."""
