@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from valdoz import __version__
 from valdoz.checks import run_valdoz_audit
 from valdoz.gates import run_phase_gate_checks
 from valdoz.phases import PHASE_COMMAND_WHITELISTS, PHASE_NAMES, get_required_deliverables
@@ -426,7 +427,6 @@ def handle_heal_tool(
         return {"status": "error", "error": f"Invalid target '{target}'. Must be 'gate', 'audit', 'slice', or 'ci'."}
 
     if target == "audit":
-        from valdoz.checks import run_valdoz_audit
         audit_res = run_valdoz_audit(root, strict=True)
         if audit_res.passed:
             return {"status": "skipped", "message": "Audit is already passing."}
@@ -446,7 +446,6 @@ def handle_heal_tool(
         if ci_log.exists():
             error_output = ci_log.read_text(encoding="utf-8", errors="replace")
         else:
-            from valdoz.checks import run_valdoz_audit
             from valdoz.gates import run_phase_gate_checks
             audit_rep = run_valdoz_audit(root, strict=True)
             gate_rep = run_phase_gate_checks(root)
@@ -598,7 +597,7 @@ def run_stdio_server(project_root: Optional[Path] = None):
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "valdoz-mcp", "version": "3.0.0"},
+                    "serverInfo": {"name": "valdoz-mcp", "version": __version__},
                 },
             }
         elif method == "tools/list":

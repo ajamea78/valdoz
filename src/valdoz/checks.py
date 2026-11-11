@@ -48,6 +48,22 @@ LOCKFILES = [
     "Cargo.lock",
 ]
 
+# ── Directive 13: Database Safety Patterns ──────────────────────────────────
+DESTRUCTIVE_DB_PATTERNS = [
+    (re.compile(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", re.IGNORECASE), "rm -f on database file"),
+    (re.compile(r"fs\.unlink(?:Sync)?\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "fs.unlinkSync on database file"),
+    (re.compile(r"os\.(?:remove|unlink)\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "os.remove on database file"),
+    (re.compile(r"\bDROP\s+DATABASE\b", re.IGNORECASE), "DROP DATABASE statement"),
+    (re.compile(r"\bDROP\s+SCHEMA\b", re.IGNORECASE), "DROP SCHEMA statement"),
+    (re.compile(r"\bTRUNCATE\s+TABLE\s+[a-zA-Z0-9_]+", re.IGNORECASE), "TRUNCATE TABLE statement"),
+]
+SQL_ONLY_PATTERNS = [
+    (re.compile(r"^\s*TRUNCATE\s+(?:TABLE\s+)?[a-zA-Z0-9_]+", re.IGNORECASE | re.MULTILINE), "TRUNCATE statement"),
+]
+FORCE_RESET_PATTERN = re.compile(r"--force-reset\b|FORCE_RESET\b", re.IGNORECASE)
+BACKUP_ROUTINE_PATTERN = re.compile(r"backups/db\b|\bbackup\b", re.IGNORECASE)
+PKG_JSON_DB_RM_PATTERN = re.compile(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", re.IGNORECASE)
+
 PYTHON_BUILTIN_MODULES = {
     "os", "sys", "re", "json", "pathlib", "datetime", "typing", "collections",
     "functools", "itertools", "hashlib", "subprocess", "math", "time", "random",
@@ -95,6 +111,7 @@ def scan_secrets(project_root: Path) -> AuditCheckResult:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=15,
                 )
                 if res_ls.stdout.strip():
                     tracked = True
@@ -1440,6 +1457,7 @@ def autofix_audit_issues(project_root: Path) -> List[str]:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=15,
                 )
                 if res_ls.stdout.strip():
                     subprocess.run(
@@ -1751,7 +1769,7 @@ def scan_database_safety(project_root: Path) -> AuditCheckResult:
             scripts = data.get("scripts", {})
             for name, cmd in scripts.items():
                 if isinstance(cmd, str):
-                    if re.search(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", cmd, re.IGNORECASE):
+                    if PKG_JSON_DB_RM_PATTERN.search(cmd):
                         violations.append(
                             f"package.json script '{name}' executes unconditional database deletion: '{cmd}'. "
                             "Must require --force-reset and automated backup in backups/db/."
@@ -1766,18 +1784,6 @@ def scan_database_safety(project_root: Path) -> AuditCheckResult:
         "tests", "test", "__tests__",
     }
     script_exts = {".js", ".ts", ".jsx", ".tsx", ".py", ".sh", ".bash", ".sql"}
-
-    destructive_patterns = [
-        (re.compile(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", re.IGNORECASE), "rm -f on database file"),
-        (re.compile(r"fs\.unlink(?:Sync)?\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "fs.unlinkSync on database file"),
-        (re.compile(r"os\.(?:remove|unlink)\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "os.remove on database file"),
-        (re.compile(r"\bDROP\s+DATABASE\b", re.IGNORECASE), "DROP DATABASE statement"),
-        (re.compile(r"\bDROP\s+SCHEMA\b", re.IGNORECASE), "DROP SCHEMA statement"),
-        (re.compile(r"\bTRUNCATE\s+TABLE\s+[a-zA-Z0-9_]+", re.IGNORECASE), "TRUNCATE TABLE statement"),
-    ]
-    sql_only_patterns = [
-        (re.compile(r"^\s*TRUNCATE\s+(?:TABLE\s+)?[a-zA-Z0-9_]+", re.IGNORECASE | re.MULTILINE), "TRUNCATE statement"),
-    ]
 
     for p in project_root.rglob("*"):
         if any(part in p.parts for part in skip_dirs):
@@ -1794,21 +1800,15 @@ def scan_database_safety(project_root: Path) -> AuditCheckResult:
                 continue
 
             rel_path = p.relative_to(project_root)
-            patterns_to_test = list(destructive_patterns)
+            patterns_to_test = list(DESTRUCTIVE_DB_PATTERNS)
             if p.suffix.lower() == ".sql":
-                patterns_to_test.extend(sql_only_patterns)
+                patterns_to_test.extend(SQL_ONLY_PATTERNS)
 
             for pattern, label in patterns_to_test:
                 if pattern.search(content):
                     # Check if file has safety gate logic
-                    has_force_reset = bool(
-                        re.search(r"--force-reset\b", content, re.IGNORECASE)
-                        or re.search(r"FORCE_RESET\b", content)
-                    )
-                    has_backup = bool(
-                        re.search(r"backups/db\b", content, re.IGNORECASE)
-                        or re.search(r"\bbackup\b", content, re.IGNORECASE)
-                    )
+                    has_force_reset = bool(FORCE_RESET_PATTERN.search(content))
+                    has_backup = bool(BACKUP_ROUTINE_PATTERN.search(content))
 
                     if not has_force_reset:
                         violations.append(
