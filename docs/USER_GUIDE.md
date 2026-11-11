@@ -298,6 +298,22 @@ To ensure documentation never falls out of sync with code changes, ValdoZ enforc
 - The `scribe` documents all functional deltas and version updates in `CHANGELOG.md` (and updates `docs/USER_GUIDE.md` / `README.md` if applicable) before declaring work complete or requesting human approval.
 - You never need to remind the agent to write documentation; the reflex is baked into the agent's core directives and mechanically enforced by the `doc-sync` audit check.
 
+### Autonomous Conversational Governance (Rule 12)
+Once initialized under ValdoZ, the agent automatically handles and structures all natural conversation requests under protocol discipline without requiring slash commands:
+- Visual and UI styling requests automatically route to the Design workflow.
+- Features, bug fixes, and refactors automatically route to test-driven slices (`/valdoz-build`).
+- Architecture, tech stack, and schema contracts route to `/valdoz-architect`.
+- Quality and audit checks route to `/valdoz-verify` and `/valdoz-audit`.
+- Staging and production deployments route to `/valdoz-deploy` with mandatory in-chat human sign-off.
+
+### Zero-Destructive Database Discipline & Data Protection (Rule 13)
+To prevent accidental data loss caused by autonomous agent resets or automated testing scripts, ValdoZ strictly enforces **Directive 13**:
+- **Prohibit Unconditional Deletions**: Never execute unconditional deletion or drop scripts on database files (`*.db`, `*.sqlite`, `DROP DATABASE`, `TRUNCATE`, `rm -f *.db*`, or `fs.unlinkSync`).
+- **Mandatory Safety Gate (`--force-reset`)**: Any reset or re-initialization script MUST require a mandatory `--force-reset` flag to execute.
+- **Automated Pre-Reset Backups (`backups/db/`)**: Before wiping or recreating the database, scripts must automatically create an immutable, timestamped copy in `backups/db/`.
+- **Strictly Additive Schema Changes**: All schema modifications and performance index additions must be additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), leaving live data intact and verifiable via `npm run audit:db` or equivalent validation checks.
+- **Mechanically Enforced by `db-safety-guard`**: The universal audit engine automatically scans `package.json` scripts, shell scripts, and codebase files, blocking any pull request or phase advance that introduces unguarded database destruction routines.
+
 ---
 
 ## 4. The 11 Lifecycle Phases (Phase 0-10 Cheat Sheet)
@@ -450,6 +466,7 @@ ValdoZ automatically checks:
 - **License Compliance & Copyleft Scanner (`--licenses`)**: Scans all declared dependencies for viral copyleft licenses (GPL, AGPL, SSPL) to prevent legal liability and unauthorized IP contamination in proprietary codebases.
 - **OpenAPI Contract & Schema Drift Scanner (`--contract`)**: Verifies OpenAPI specifications against implemented codebase routes (FastAPI, Flask, Express, NestJS) to detect undocumented shadow endpoints and unimplemented contract specs.
 - **Container & IaC Hardening Scanner (`--containers`)**: Audits Dockerfiles and Docker Compose manifests against Hadolint/CIS benchmarks, catching root user execution (CWE-250), floating image tags, insecure host mounts (`/var/run/docker.sock`), and privileged mode escalations.
+- **Zero-Destructive Database Safety Guard (`db-safety-guard`)**: Validates adherence to Directive 13 across package manifests, shell scripts, and application code. Blocks unguarded database deletion (`rm -f *.db`, `fs.unlinkSync`), `DROP DATABASE`, and `TRUNCATE` operations that lack `--force-reset` safety checks and automated timestamped backups in `backups/db/`.
 
 ### Running Advanced Security & Compliance Audits
 To trigger AST static security analysis with Semgrep during an audit:

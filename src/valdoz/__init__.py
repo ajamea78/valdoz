@@ -34,7 +34,7 @@ from valdoz.state import (
     verify_phase_integrity,
 )
 
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 
 __all__ = [
     "__version__",

@@ -5,6 +5,28 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-11-11
+
+### Added
+- **Enacted Directive 13: Zero-Destructive Database Discipline & Data Protection**:
+  - Added Directive 13 across `src/valdoz/sync.py`, `AGENTS.md`, `GEMINI.md`, and `.agent/rules/00-core-discipline.md`:
+    - Prohibits unconditional deletion or drop scripts on database files (`*.db`, `*.sqlite`, `DROP DATABASE`, `TRUNCATE`, `rm -f *.db*`, or `fs.unlinkSync`).
+    - Mandates `--force-reset` command-line flag requirement on all database reset, initialization, and seed scripts.
+    - Mandates automatic creation of immutable, timestamped backups in `backups/db/` prior to executing any destructive wipe.
+    - Mandates strictly additive schema evolutions (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), leaving live data intact and verifiable.
+- **Dedicated Modular Rule (`.agent/rules/04-database-discipline.md`)**:
+  - Scaffolds standalone database discipline and data protection policy file during `valdoz sync-runtimes`.
+- **Database Safety Audit Check (`db-safety-guard`) in Base Pack (`src/valdoz/checks.py`, `src/valdoz/packs.py`)**:
+  - Registered `db-safety-guard` in the default `base` pack.
+  - Automatically scans `package.json` scripts, shell scripts (`.sh`, `.bash`), JavaScript/TypeScript files, Python files, and SQL migration files.
+  - Detects unguarded database removals, unlinks, or database drops lacking `--force-reset` gates and backup routines, mechanically blocking phase advancement or slice completion.
+- **Playbook & Skill Enhancements**:
+  - Updated `valdoz-architect`: Enforces additive schema designs, migration safety, and backup directories.
+  - Updated `valdoz-setup`: Mandates automated safety gates on scaffolded `init-db` and `reset-db` scripts.
+  - Updated `valdoz-build`: Enforces backward-compatible, additive database changes during feature slices.
+- **Documentation**:
+  - Added full documentation for Directive 13 and `db-safety-guard` audit check in `docs/USER_GUIDE.md`.
+
 ## [3.3.0] - 2026-11-06
 
 ### Added

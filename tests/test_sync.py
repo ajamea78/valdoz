@@ -47,6 +47,8 @@ def test_runtime_sync_all_files(temp_project: Path):
     assert (temp_project / ".agent" / "rules" / "00-core-discipline.md").exists()
     assert (temp_project / ".agent" / "rules" / "01-concurrency-roles.md").exists()
     assert (temp_project / ".agent" / "rules" / "02-research-adversarial.md").exists()
+    assert (temp_project / ".agent" / "rules" / "03-doc-sync.md").exists()
+    assert (temp_project / ".agent" / "rules" / "04-database-discipline.md").exists()
 
     # 2. Check all streamlined playbooks exist
     expected_skills = [

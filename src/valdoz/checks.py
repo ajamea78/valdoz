@@ -1731,6 +1731,110 @@ def scan_monorepo_verification_integrity(project_root: Path) -> AuditCheckResult
     )
 
 
+def scan_database_safety(project_root: Path) -> AuditCheckResult:
+    """Verifies Zero-Destructive Database Discipline & Data Protection (Directive 13).
+
+    Checks:
+    1. Flags scripts in package.json that execute unconditional rm -f *.db or wipes.
+    2. Flags scripts (.js, .ts, .py, .sh, .sql) performing destructive operations (DROP DATABASE,
+       TRUNCATE, or file unlinking of .db / .sqlite files) without mandatory --force-reset
+       safety gates and automated backup routines in backups/db/.
+    3. Excludes tests directories and test fixtures.
+    """
+    violations: List[str] = []
+
+    # 1. Inspect package.json scripts for raw db deletions
+    pkg_json = project_root / "package.json"
+    if pkg_json.exists():
+        try:
+            data = json.loads(pkg_json.read_text(encoding="utf-8"))
+            scripts = data.get("scripts", {})
+            for name, cmd in scripts.items():
+                if isinstance(cmd, str):
+                    if re.search(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", cmd, re.IGNORECASE):
+                        violations.append(
+                            f"package.json script '{name}' executes unconditional database deletion: '{cmd}'. "
+                            "Must require --force-reset and automated backup in backups/db/."
+                        )
+        except Exception:
+            pass
+
+    # 2. Inspect code and script files
+    skip_dirs = {
+        ".git", ".venv", "node_modules", "dist", "build",
+        ".valdoz", ".valdoz-archive", ".pytest_cache",
+        "tests", "test", "__tests__",
+    }
+    script_exts = {".js", ".ts", ".jsx", ".tsx", ".py", ".sh", ".bash", ".sql"}
+
+    destructive_patterns = [
+        (re.compile(r"\brm\s+-[rf]{1,2}\s+.*?\.(?:db|sqlite|sqlite3)\b", re.IGNORECASE), "rm -f on database file"),
+        (re.compile(r"fs\.unlink(?:Sync)?\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "fs.unlinkSync on database file"),
+        (re.compile(r"os\.(?:remove|unlink)\([^)]*?\.(?:db|sqlite|sqlite3)", re.IGNORECASE), "os.remove on database file"),
+        (re.compile(r"\bDROP\s+DATABASE\b", re.IGNORECASE), "DROP DATABASE statement"),
+        (re.compile(r"\bDROP\s+SCHEMA\b", re.IGNORECASE), "DROP SCHEMA statement"),
+        (re.compile(r"\bTRUNCATE\s+TABLE\s+[a-zA-Z0-9_]+", re.IGNORECASE), "TRUNCATE TABLE statement"),
+    ]
+    sql_only_patterns = [
+        (re.compile(r"^\s*TRUNCATE\s+(?:TABLE\s+)?[a-zA-Z0-9_]+", re.IGNORECASE | re.MULTILINE), "TRUNCATE statement"),
+    ]
+
+    for p in project_root.rglob("*"):
+        if any(part in p.parts for part in skip_dirs):
+            continue
+        if p.is_file() and p.suffix.lower() in script_exts:
+            # Skip test files
+            name_lower = p.name.lower()
+            if name_lower.startswith("test_") or name_lower.endswith(".test.js") or name_lower.endswith(".test.ts") or name_lower.endswith(".spec.ts"):
+                continue
+
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+
+            rel_path = p.relative_to(project_root)
+            patterns_to_test = list(destructive_patterns)
+            if p.suffix.lower() == ".sql":
+                patterns_to_test.extend(sql_only_patterns)
+
+            for pattern, label in patterns_to_test:
+                if pattern.search(content):
+                    # Check if file has safety gate logic
+                    has_force_reset = bool(
+                        re.search(r"--force-reset\b", content, re.IGNORECASE)
+                        or re.search(r"FORCE_RESET\b", content)
+                    )
+                    has_backup = bool(
+                        re.search(r"backups/db\b", content, re.IGNORECASE)
+                        or re.search(r"\bbackup\b", content, re.IGNORECASE)
+                    )
+
+                    if not has_force_reset:
+                        violations.append(
+                            f"Destructive database operation in '{rel_path}': {label} detected without "
+                            "mandatory --force-reset safety gate and automated backup routine."
+                        )
+                        break
+                    elif not has_backup:
+                        violations.append(
+                            f"Reset script in '{rel_path}' lacks automated timestamped backup routine to 'backups/db/' prior to execution."
+                        )
+                        break
+
+    passed = len(violations) == 0
+    return AuditCheckResult(
+        id="db-safety-guard",
+        name="Database Safety & Anti-Destruction Guard",
+        severity="blocking",
+        status="ran",
+        passed=passed,
+        message="Database operations adhere to zero-destructive discipline (no unguarded drops or wipes)."
+        if passed
+        else "; ".join(violations[:3]),
+    )
+
+
 def run_valdoz_audit(
     project_root: Path,
     strict: bool = False,
@@ -1825,6 +1929,7 @@ def run_valdoz_audit(
         "container-hardening": scan_container_hardening,
         "iac-hardening": scan_container_hardening,
         "monorepo-verification-integrity": scan_monorepo_verification_integrity,
+        "db-safety-guard": scan_database_safety,
     }
 
     for chk in configured_checks:

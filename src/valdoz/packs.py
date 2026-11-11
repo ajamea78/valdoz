@@ -65,6 +65,7 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
             PackCheckDefinition(id="audit-anchor", description="Verify cryptographic audit log external anchor", severity="blocking"),
             PackCheckDefinition(id="doc-sync", description="Verify documentation and changelog synchronization", severity="blocking"),
             PackCheckDefinition(id="monorepo-verification-integrity", description="Verify workspace package linting and root verify script integrity", severity="warning"),
+            PackCheckDefinition(id="db-safety-guard", description="Verify zero-destructive database discipline and safety flags", severity="blocking"),
         ],
     ),
     "web-app": PackManifest(

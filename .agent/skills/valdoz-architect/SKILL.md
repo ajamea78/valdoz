@@ -10,6 +10,7 @@ description: >-
 1. **Tech Stack Selection:** Compare 2-3 technology stacks against project requirements (frontend, backend, database, state management). Document decision in `docs/03-stack-decision.md`.
 2. **Hosting & Cloud Infrastructure:** Define hosting targets upfront (Vercel, Cloudflare, Supabase, Fly.io, Cloud Run, AWS). Define cost budgets, serverless vs container strategy, environment variables, and CDN/DNS setup.
 3. **System Architecture & Data Models:** Design system components, database schemas, API contracts (OpenAPI/REST/GraphQL), third-party integrations, and implementation slice roadmaps in `docs/04-architecture.md` and `docs/04-plan.md`.
+4. **Zero-Destructive Database Discipline:** Enforce Directive 13 across all data models. Schemas and migrations must be strictly additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`). Unconditional database drop or wipe routines are strictly prohibited.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git status`, `git diff`

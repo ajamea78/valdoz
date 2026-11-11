@@ -52,7 +52,8 @@ def get_core_agent_rules() -> str:
 9. Full-Spectrum Non-Bypassable Verification: Do not say 'done' until all four verification pillars have run clean across root and all workspace subprojects (linters, typechecks, tests, builds). Bundlers (e.g., vite build) transpile syntax but do not catch undeclared variables or verify runtime boot viability; run linters (npm run lint / ruff) and typecheckers explicitly. For UI/frontend tasks, automated tests verify code logic but cannot detect visual layout shifts (CLS) or mounting flickers; audit component lifecycles to banish early-return skeleton traps (maintain persistent layout frames) and verify cache-first SWR state persistence across page transitions. Show the verbatim output.
 10. At the end of a phase or slice, stop and request human approval. Never approve your own work. In Antigravity, present the deliverables and use the interactive in-chat approval bridge (`valdoz_request_human_approval` or user confirmation prompt); do not require the human to switch to an external terminal.
 11. Atomic Documentation Reflex: Never consider any update, bug fix, security patch, API change, or feature addition complete without reflecting it in CHANGELOG.md and relevant documentation (docs/USER_GUIDE.md or README.md). The 'scribe' role must be assumed automatically in the same session to document every functional delta before requesting human approval or declaring the task finished.
-12. Autonomous Conversational Governance: In any repository governed by ValdoZ, you MUST automatically handle and structure all natural user requests (design, feature implementation, refactoring, bug fixes, testing, deployment) under ValdoZ protocol discipline. The user does NOT need to prefix prompts with `/valdoz` or invoke slash commands. Automatically map user intent to the proper workflow: UI/redesign requests to the Design workflow, new features to TDD Build slices, test requests to Verification gates, and deployment requests to Deploy procedures with in-chat approvals."""
+12. Autonomous Conversational Governance: In any repository governed by ValdoZ, you MUST automatically handle and structure all natural user requests (design, feature implementation, refactoring, bug fixes, testing, deployment) under ValdoZ protocol discipline. The user does NOT need to prefix prompts with `/valdoz` or invoke slash commands. Automatically map user intent to the proper workflow: UI/redesign requests to the Design workflow, new features to TDD Build slices, test requests to Verification gates, and deployment requests to Deploy procedures with in-chat approvals.
+13. Zero-Destructive Database Discipline & Data Protection: Never execute unconditional deletion or drop scripts on database files (*.db, *.sqlite, DROP DATABASE, TRUNCATE, rm -f *.db*, or fs.unlinkSync). Any reset or re-initialization script MUST require a mandatory --force-reset flag AND automatically create an immutable, timestamped backup in backups/db/ prior to execution. All schema alterations and performance index additions MUST be strictly additive (CREATE INDEX IF NOT EXISTS), leaving live data intact and fully verifiable via npm run audit:db or equivalent validation commands."""
 
 
 def inject_managed_block(existing_content: str, new_block_content: str) -> str:
@@ -134,6 +135,13 @@ def generate_rule_files() -> Dict[str, str]:
             "1. Atomic Documentation Reflex: Never consider any update, bug fix, security patch, API change, or feature addition complete without reflecting it in `CHANGELOG.md` and relevant documentation (`docs/USER_GUIDE.md` or `README.md`).\n"
             "2. Scribe Transition: After the `builder` role completes code and test verification, automatically switch to the `scribe` role to record the functional delta.\n"
             "3. Changelog Maintenance: Keep `CHANGELOG.md` updated per Keep a Changelog standards under the active version header before requesting human approval or completing tasks.\n"
+        ),
+        "04-database-discipline.md": (
+            "# Database Discipline and Data Protection Policy\n\n"
+            "1. Zero-Destructive Discipline: Never execute unconditional deletion or drop scripts on database files (`*.db`, `*.sqlite`, `DROP DATABASE`, `TRUNCATE`, `rm -f *.db*`, or `fs.unlinkSync`).\n"
+            "2. Mandatory Confirmation & Backups: Any reset or re-initialization script MUST require a mandatory `--force-reset` flag AND automatically create an immutable, timestamped backup in `backups/db/` prior to execution.\n"
+            "3. Additive Schema Evolution: All schema alterations and performance index additions MUST be strictly additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`), leaving live data intact and verifiable.\n"
+            "4. Data Verification: Validate schema integrity using verification commands (such as `npm run audit:db` or migration checks) without mutating or dropping live application data.\n"
         ),
     }
 
@@ -243,6 +251,7 @@ description: >-
 1. **Tech Stack Selection:** Compare 2-3 technology stacks against project requirements (frontend, backend, database, state management). Document decision in `docs/03-stack-decision.md`.
 2. **Hosting & Cloud Infrastructure:** Define hosting targets upfront (Vercel, Cloudflare, Supabase, Fly.io, Cloud Run, AWS). Define cost budgets, serverless vs container strategy, environment variables, and CDN/DNS setup.
 3. **System Architecture & Data Models:** Design system components, database schemas, API contracts (OpenAPI/REST/GraphQL), third-party integrations, and implementation slice roadmaps in `docs/04-architecture.md` and `docs/04-plan.md`.
+4. **Zero-Destructive Database Discipline:** Enforce Directive 13 across all data models. Schemas and migrations must be strictly additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`). Unconditional database drop or wipe routines are strictly prohibited.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git status`, `git diff`
@@ -276,6 +285,7 @@ description: >-
 3. Configure deployment and container definitions (`Dockerfile`, `docker-compose.yml`, `fly.toml`, `vercel.json`).
 4. Create `.env.example` with required secret placeholders.
 5. Create CI pipeline workflow file (`.github/workflows/ci.yml`). Ensure baseline empty test suite passes.
+6. Configure automated database safety gates (Directive 13): Any database reset, initialization, or seed scripts (`scripts/init-db.*`, `scripts/reset-db.*`) MUST halt unless `--force-reset` is explicitly passed, and automatically create a timestamped backup in `backups/db/` prior to execution.
 
 ## Permitted Command Whitelist
 `valdoz *`, `git *`, `npm *`, `pnpm *`, `uv *`, `pip *`, `cargo *`
@@ -324,7 +334,8 @@ description: >-
 1. Implement features incrementally in isolated, tested slices.
 2. For each slice, create `docs/slices/NN-name.md`, write automated tests first (TDD), implement the code, run typechecks, linters, and test suite.
 3. For frontend slices, enforce persistent layout frames (no full-page skeleton replacement) and cache-first state initialization to guarantee flicker-free navigation.
-4. Mark slice completion with `valdoz slice done` (executes non-bypassable full-spectrum verification across all packages).
+4. For database slices, enforce additive schema changes (Directive 13) leaving live application data intact.
+5. Mark slice completion with `valdoz slice done` (executes non-bypassable full-spectrum verification across all packages).
 
 ## Permitted Command Whitelist
 `valdoz *`, `valdoz verify`, `git status`, `git diff`, test runners, linters, build tools.
