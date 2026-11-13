@@ -15,7 +15,7 @@ from valdoz.approval import (
 )
 from valdoz.checks import run_valdoz_audit
 from valdoz.gates import GateCheck, GateReport, run_phase_gate_checks
-from valdoz.healing import redact_secrets_in_text
+from valdoz.healing import redact_secrets_in_text, scrub_text
 from valdoz.phases import (
     PHASE_NAMES,
     advance_phase,
@@ -60,6 +60,7 @@ __all__ = [
     "run_phase_gate_checks",
     "run_valdoz_audit",
     "save_state",
+    "scrub_text",
     "start_slice",
     "verify_audit_log_integrity",
     "verify_external_anchor",

@@ -151,16 +151,21 @@ def generate_semantic_diff_summary(
 
     # Log to history with secret redaction
     if project_root:
-        from valdoz.healing import redact_secrets_in_text
+        from valdoz.healing import scrub_text
         history_file = project_root / ".valdoz" / "history" / "semantic_diffs.jsonl"
         history_file.parent.mkdir(parents=True, exist_ok=True)
+        clean_snippet, _ = scrub_text(diff_text[:1000])
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "summary": summary,
-            "diff_snippet": redact_secrets_in_text(diff_text[:1000]),
+            "diff_snippet": clean_snippet,
         }
         with open(history_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+        try:
+            os.chmod(history_file, 0o600)
+        except OSError:
+            pass
 
     return summary
 

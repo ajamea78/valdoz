@@ -40,8 +40,8 @@ REDACTION_PATTERNS = [
 ]
 
 
-def redact_secrets_in_text(raw_text: str) -> Tuple[str, int]:
-    """Redacts API keys, credentials, private keys, and auth tokens from raw text.
+def scrub_text(raw_text: str) -> Tuple[str, int]:
+    """Sanitizes API keys, credentials, private keys, and auth tokens from raw text.
 
     Scrubs sensitive strings before sending diagnostics to external LLM endpoints.
     Returns:
@@ -60,6 +60,11 @@ def redact_secrets_in_text(raw_text: str) -> Tuple[str, int]:
             sanitized = pat.sub(replacement, sanitized)
 
     return sanitized, total_redacted
+
+
+def redact_secrets_in_text(raw_text: str) -> Tuple[str, int]:
+    """Alias for scrub_text for backward compatibility."""
+    return scrub_text(raw_text)
 
 
 class HealingContext(BaseModel):
@@ -152,8 +157,8 @@ def build_diagnosis_prompt(ctx: HealingContext) -> str:
     Automatically scrubs sensitive credentials, API keys, private keys, and auth tokens
     from error traces, git diffs, and slice specs to prevent data exfiltration.
     """
-    clean_error, _ = redact_secrets_in_text(ctx.error_trace)
-    clean_diff, _ = redact_secrets_in_text(ctx.git_diff or "")
+    clean_error, _ = scrub_text(ctx.error_trace)
+    clean_diff, _ = scrub_text(ctx.git_diff or "")
 
     prompt = f"""You are the ValdoZ Protocol Autonomous Self-Healing Engine.
 A build, test, or gate check has failed. Analyze the failure trace, identify the exact root cause, and provide a minimal, working code fix.
@@ -174,7 +179,7 @@ RECENT GIT DIFF:
 ```
 """
     if ctx.slice_spec:
-        clean_spec, _ = redact_secrets_in_text(ctx.slice_spec[:2000])
+        clean_spec, _ = scrub_text(ctx.slice_spec[:2000])
         prompt += f"""
 SLICE SPECIFICATION:
 ```markdown
