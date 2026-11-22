@@ -19,6 +19,8 @@ description: >-
 - `docs/03-stack-decision.md`
 - `docs/04-architecture.md`
 - `docs/04-plan.md`
+- `docs/04-art-direction.md`
+- `DESIGN.md`
 
 ## Side-Effect Classification
 - Category: **Files only**
