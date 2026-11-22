@@ -66,6 +66,7 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
             PackCheckDefinition(id="doc-sync", description="Verify documentation and changelog synchronization", severity="blocking"),
             PackCheckDefinition(id="monorepo-verification-integrity", description="Verify workspace package linting and root verify script integrity", severity="warning"),
             PackCheckDefinition(id="db-safety-guard", description="Verify zero-destructive database discipline and safety flags", severity="blocking"),
+            PackCheckDefinition(id="slice-integrity-guard", description="Verify mechanical slice discipline and slice-tracked code integrity", severity="blocking"),
         ],
     ),
     "web-app": PackManifest(
@@ -76,6 +77,7 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
         extends=["base"],
         checks=[
             PackCheckDefinition(id="undeclared-imports", description="Verify all imports exist in package manifest", severity="blocking"),
+            PackCheckDefinition(id="anti-slop-gate", description="Verify anti-slop juror rubric, design token registry adherence, and tactile interaction micro-states", severity="blocking"),
             PackCheckDefinition(id="build-check", description="Run project build script if present", severity="blocking"),
             PackCheckDefinition(id="test-check", description="Run project test runner", severity="blocking"),
             PackCheckDefinition(id="liveness-probe", description="Verify deployment preview URLs if available", severity="warning"),
@@ -88,6 +90,7 @@ BUILTIN_PACKS: Dict[str, PackManifest] = {
         description="Marketing and content websites, SEO basics, performance budget, accessibility.",
         extends=["base"],
         checks=[
+            PackCheckDefinition(id="anti-slop-gate", description="Verify anti-slop juror rubric, design token registry adherence, and tactile interaction micro-states", severity="blocking"),
             PackCheckDefinition(id="seo-meta-check", description="Check for HTML title and meta tags", severity="warning"),
             PackCheckDefinition(id="accessibility-check", description="Check image alt tags and basic a11y", severity="warning"),
             PackCheckDefinition(id="bundle-budget", description="Verify bundle size budget", severity="warning"),

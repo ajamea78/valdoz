@@ -1,4 +1,4 @@
-# The Complete ValdoZ Protocol v3.1.1 User Guide
+# The Complete ValdoZ Protocol v3.5.0 User Guide
 
 > **A practical, step-by-step handbook for human tech leads and Google Antigravity pair programming.**
 
@@ -298,13 +298,20 @@ To ensure documentation never falls out of sync with code changes, ValdoZ enforc
 - The `scribe` documents all functional deltas and version updates in `CHANGELOG.md` (and updates `docs/USER_GUIDE.md` / `README.md` if applicable) before declaring work complete or requesting human approval.
 - You never need to remind the agent to write documentation; the reflex is baked into the agent's core directives and mechanically enforced by the `doc-sync` audit check.
 
-### Autonomous Conversational Governance (Rule 12)
+### Autonomous Conversational Governance & Mechanical State Machine Execution (Rule 12 & The Dania Guard)
 Once initialized under ValdoZ, the agent automatically handles and structures all natural conversation requests under protocol discipline without requiring slash commands:
 - Visual and UI styling requests automatically route to the Design workflow.
 - Features, bug fixes, and refactors automatically route to test-driven slices (`/valdoz-build`).
 - Architecture, tech stack, and schema contracts route to `/valdoz-architect`.
 - Quality and audit checks route to `/valdoz-verify` and `/valdoz-audit`.
 - Staging and production deployments route to `/valdoz-deploy` with mandatory in-chat human sign-off.
+
+**The Dania Guard (Mechanical State Machine Obligation):**
+Verbal compliance without literal state machine execution is classified as a protocol breach. In Phase 6 (Build), an agent or developer cannot simply write code in `src/` without an active slice:
+- Every code task MUST begin by creating an active slice (`valdoz slice start <slice-id>`).
+- Slices must be closed with non-bypassable full-spectrum verification (`valdoz slice done <slice-id>`).
+- **Mechanically Enforced by Git Pre-Commit Hook**: Any attempt to stage or commit files in `src/` during Phase 6 when `.valdoz/slices/` has no active slice is rejected with `[ValdoZ Slice Protection Error]`.
+- **Audit Guard (`slice-integrity-guard`)**: Part of the `base` pack, automatically scanning for orphaned, un-sliced code files.
 
 ### Zero-Destructive Database Discipline & Data Protection (Rule 13)
 To prevent accidental data loss caused by autonomous agent resets or automated testing scripts, ValdoZ strictly enforces **Directive 13**:
@@ -313,6 +320,20 @@ To prevent accidental data loss caused by autonomous agent resets or automated t
 - **Automated Pre-Reset Backups (`backups/db/`)**: Before wiping or recreating the database, scripts must automatically create an immutable, timestamped copy in `backups/db/`.
 - **Strictly Additive Schema Changes**: All schema modifications and performance index additions must be additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), leaving live data intact and verifiable via `npm run audit:db` or equivalent validation checks.
 - **Mechanically Enforced by `db-safety-guard`**: The universal audit engine automatically scans `package.json` scripts, shell scripts, and codebase files, blocking any pull request or phase advance that introduces unguarded database destruction routines.
+
+### Art Direction & Anti-Slop Aesthetic Discipline (Rule 14 & Phase 4.5)
+To eliminate "The Design Void" between architectural planning and code construction:
+- **Phase 4 Expanded to Architecture & Art Direction**: Before moving to Phase 5 or writing code in Phase 6, the team must produce `docs/04-art-direction.md` and `DESIGN.md` token registry.
+- **Four Aesthetic Specifications**:
+  1. *Metaphor & Subject Inventory*: 8–10 real-world domain attributes giving the project its metaphor.
+  2. *Typographic System*: Display, UI, and Monospace Data fonts, tracking, and optical weights.
+  3. *Atmosphere & Surface Rules*: Hairline 1px borders, surface contrast, dark/light ratios, and explicit prohibitions against generic pastel badge slop or identical 3-card grids.
+  4. *Hero Artifact Blueprint*: Crown jewel signature component designed before component scaffolding.
+- **Anti-Slop Juror Rubric (`anti-slop-gate`)**:
+  - Automatically audited during `valdoz slice done` and `valdoz audit`.
+  - Rejects default unstyled Tailwind palette colors (`bg-blue-500`, `text-gray-400`, etc.), requiring semantic variables from `DESIGN.md`.
+  - Mandates `tabular-nums` formatting for all numeric and currency metrics.
+  - Requires physical micro-interaction states (`active:scale-[0.98]`) on all interactive buttons.
 
 ---
 
@@ -324,10 +345,10 @@ To prevent accidental data loss caused by autonomous agent resets or automated t
 | **1** | **Intake** | Client brief quoted verbatim, risks, assumptions | `docs/01-intake.md` |
 | **2** | **Requirements** | Functional/non-functional specs, acceptance criteria | `docs/02-requirements.md` |
 | **3** | **Stack Decision** | Compare 2–3 options, trade-offs, pinned versions | `docs/03-stack-decision.md` + decision log |
-| **4** | **Architecture** | Data models, API contracts, auth, slice plan | `docs/04-architecture.md`, `docs/04-plan.md` |
+| **4** | **Architecture & Art Direction** | Data models, API contracts, art direction, design tokens | `docs/04-architecture.md`, `docs/04-plan.md`, `docs/04-art-direction.md`, `DESIGN.md` |
 | **5** | **Setup** | Tooling, linter, test runner, CI config, `.env.example` | Working empty repo, passing tests |
 | **6** | **Build Slices** | Repeatable TDD slices: spec $\rightarrow$ tests $\rightarrow$ code | `docs/slices/NN-name.md`, code, tests |
-| **7** | **Verify** | Full test suite, security checklist, accessibility | `docs/07-verification.md` |
+| **7** | **Verify** | Full test suite, security checklist, anti-slop audit | `docs/07-verification.md` |
 | **8** | **Deploy** | Deployment steps, live health proof, rollback plan | `docs/08-deploy.md` (IRREVERSIBLE) |
 | **9** | **Handover** | Runbook, access credentials transfer, client sign-off | `docs/09-handover.md` (IRREVERSIBLE) |
 | **10** | **Changes** | Post-launch change requests | `docs/changes/CR-NNN.md` |

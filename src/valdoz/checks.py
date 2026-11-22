@@ -1835,6 +1835,178 @@ def scan_database_safety(project_root: Path) -> AuditCheckResult:
     )
 
 
+# ── Directive 14: Anti-Slop Juror & Aesthetic Discipline ─────────────────────
+TAILWIND_DEFAULT_PALETTE_PATTERN = re.compile(
+    r"\b(?:bg|text|border|ring|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[1-9]00\b"
+)
+NUMERIC_METRIC_PATTERN = re.compile(
+    r"[\$€£¥]\s*\d[\d,.]*|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+(?:\.\d+)?%"
+)
+BUTTON_TAG_PATTERN = re.compile(r"<button\b[^>]*>|<Button\b[^>]*>|role=[\"']button[\"'][^>]*>", re.IGNORECASE)
+ACTIVE_SCALE_PATTERN = re.compile(r"active:scale-")
+
+
+def scan_anti_slop_juror(project_root: Path) -> AuditCheckResult:
+    """Verifies Anti-Slop Juror Rubric against frontend code:
+    - Rejects default unstyled Tailwind color palettes (requires DESIGN.md tokens).
+    - Requires tabular alignment (tabular-nums) for numeric and currency metrics.
+    - Requires physical interaction micro-states (e.g. active:scale-[0.98]) on buttons.
+    """
+    violations: List[str] = []
+    frontend_exts = {".tsx", ".jsx", ".vue", ".svelte", ".html"}
+    ignore_dirs = {"node_modules", ".git", ".next", "dist", "build", ".venv", ".valdoz", "coverage"}
+
+    frontend_files: List[Path] = []
+    for p in project_root.rglob("*"):
+        if not p.is_file():
+            continue
+        if any(ignored in p.parts for ignored in ignore_dirs):
+            continue
+        if p.suffix.lower() in frontend_exts:
+            frontend_files.append(p)
+
+    if not frontend_files:
+        return AuditCheckResult(
+            id="anti-slop-gate",
+            name="Anti-Slop Juror Rubric",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message="No frontend components found; Anti-Slop Juror check passed.",
+        )
+
+    for file_path in frontend_files:
+        rel_path = file_path.relative_to(project_root)
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        lines = content.splitlines()
+
+        # 1. Scan for default unstyled Tailwind palette colors
+        for idx, line in enumerate(lines, start=1):
+            m = TAILWIND_DEFAULT_PALETTE_PATTERN.search(line)
+            if m:
+                violations.append(
+                    f"Found default unstyled Tailwind palette color ('{m.group(0)}') in '{rel_path}:{idx}'. "
+                    "Use semantic tokens from DESIGN.md (e.g., var(--surface), var(--accent))."
+                )
+
+        # 2. Scan for raw numbers/currency without tabular-nums
+        for idx, line in enumerate(lines, start=1):
+            if NUMERIC_METRIC_PATTERN.search(line):
+                # Check surrounding lines (current line and 2 preceding lines) for tabular-nums
+                context_start = max(0, idx - 3)
+                context_block = "\n".join(lines[context_start:idx])
+                if "tabular-nums" not in context_block and "tabular" not in context_block:
+                    violations.append(
+                        f"Numeric or currency metric in '{rel_path}:{idx}' lacks 'tabular-nums' styling for tabular alignment."
+                    )
+
+        # 3. Scan for buttons without physical interaction micro-states (active:scale-)
+        # We search for opening button tags (including multiline tags)
+        for m in re.finditer(r"(<(?:button|Button)\b[^>]*>|role=[\"']button[\"'][^>]*>)", content, re.IGNORECASE):
+            tag_content = m.group(1)
+            line_no = content[:m.start()].count("\n") + 1
+            if not ACTIVE_SCALE_PATTERN.search(tag_content):
+                violations.append(
+                    f"Button in '{rel_path}:{line_no}' lacks physical interaction state (e.g. 'active:scale-[0.98]')."
+                )
+
+    passed = len(violations) == 0
+    return AuditCheckResult(
+        id="anti-slop-gate",
+        name="Anti-Slop Juror Rubric",
+        severity="blocking",
+        status="ran",
+        passed=passed,
+        message="Anti-Slop Juror Rubric verified: design tokens and micro-interactions adhere to aesthetics protocol."
+        if passed
+        else f"Anti-Slop Juror Rubric violations found:\n" + "\n".join(f" - {v}" for v in violations[:10]),
+    )
+
+
+# ── Directive 12: Mechanical Slice Integrity Guard ──────────────────────────
+def scan_slice_integrity(project_root: Path) -> AuditCheckResult:
+    """Verifies mechanical slice discipline and slice-tracked code integrity.
+
+    During Phase 6 (Build), if code exists in 'src/', an active tracked slice must exist in .valdoz/slices/.
+    """
+    state_file = project_root / ".valdoz" / "state.json"
+    if not state_file.exists():
+        return AuditCheckResult(
+            id="slice-integrity-guard",
+            name="Mechanical Slice Integrity Guard",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message="No ValdoZ state found; skipping slice integrity check.",
+        )
+
+    try:
+        state = load_state(project_root)
+        current_phase = state.current_phase
+    except Exception as e:
+        return AuditCheckResult(
+            id="slice-integrity-guard",
+            name="Mechanical Slice Integrity Guard",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message=f"Failed to read ValdoZ state: {e}",
+        )
+
+    if current_phase != 6:
+        return AuditCheckResult(
+            id="slice-integrity-guard",
+            name="Mechanical Slice Integrity Guard",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message=f"Current phase is {current_phase} (not Phase 6 Build); slice integrity check passed.",
+        )
+
+    src_dir = project_root / "src"
+    src_files = [
+        f for f in src_dir.rglob("*")
+        if f.is_file() and not f.name.startswith(".") and "__pycache__" not in str(f)
+    ] if src_dir.exists() else []
+
+    if not src_files:
+        return AuditCheckResult(
+            id="slice-integrity-guard",
+            name="Mechanical Slice Integrity Guard",
+            severity="blocking",
+            status="ran",
+            passed=True,
+            message="No code found in src/; slice integrity verified.",
+        )
+
+    slices_dir = project_root / ".valdoz" / "slices"
+    slice_files = list(slices_dir.glob("*.json")) if slices_dir.exists() else []
+
+    if not slice_files:
+        return AuditCheckResult(
+            id="slice-integrity-guard",
+            name="Mechanical Slice Integrity Guard",
+            severity="blocking",
+            status="ran",
+            passed=False,
+            message="No tracked slices found in .valdoz/slices/ while code exists in src/ during Phase 6! "
+                    "You MUST execute 'valdoz slice start <slice-id>' before writing or modifying code.",
+        )
+
+    return AuditCheckResult(
+        id="slice-integrity-guard",
+        name="Mechanical Slice Integrity Guard",
+        severity="blocking",
+        status="ran",
+        passed=True,
+        message=f"Active tracked slice(s) found in .valdoz/slices/ ({len(slice_files)} slice(s)); integrity verified.",
+    )
+
+
 def run_valdoz_audit(
     project_root: Path,
     strict: bool = False,
@@ -1930,6 +2102,8 @@ def run_valdoz_audit(
         "iac-hardening": scan_container_hardening,
         "monorepo-verification-integrity": scan_monorepo_verification_integrity,
         "db-safety-guard": scan_database_safety,
+        "anti-slop-gate": scan_anti_slop_juror,
+        "slice-integrity-guard": scan_slice_integrity,
     }
 
     for chk in configured_checks:

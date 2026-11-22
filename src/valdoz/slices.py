@@ -251,6 +251,19 @@ def done_slice(
             f"(threshold: -{min_coverage_threshold:.2f}%)."
         )
 
+    # Aesthetic Gate: Verify Anti-Slop Juror Rubric if frontend files exist
+    try:
+        from valdoz.checks import scan_anti_slop_juror
+        slop_report = scan_anti_slop_juror(project_root)
+        if not slop_report.passed:
+            raise SliceGateConditionError(
+                f"Slice Gate Condition FAILED: Anti-Slop Juror Rubric rejected slice '{slice_id}':\n{slop_report.message}"
+            )
+    except SliceGateConditionError:
+        raise
+    except Exception:
+        pass
+
     # Advance state to gated
     slice_state.status = "gated"
     slice_state.tests_passed = True

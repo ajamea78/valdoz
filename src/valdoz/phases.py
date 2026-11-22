@@ -49,7 +49,7 @@ PHASE_DELIVERABLES: Dict[int, List[str]] = {
     1: ["docs/01-intake.md"],
     2: ["docs/02-requirements.md"],
     3: ["docs/03-stack-decision.md"],
-    4: ["docs/04-architecture.md", "docs/04-plan.md"],
+    4: ["docs/04-architecture.md", "docs/04-plan.md", "docs/04-art-direction.md", "DESIGN.md"],
     5: ["README.md"],
     6: [],  # Dynamic per slice (docs/slices/NN-name.md)
     7: ["docs/07-verification.md"],

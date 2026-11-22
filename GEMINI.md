@@ -4,15 +4,9 @@
 This repository is governed by the ValdoZ Protocol delivery discipline engine.
 
 ## Autonomous Conversational Governance
-- In any repository governed by ValdoZ, you MUST automatically manage and structure all user requests according to the ValdoZ delivery framework.
-- The user does NOT need to type `/valdoz` or invoke slash commands for each request.
-- Automatically infer the correct workflow from user prompts:
-  - UI, styling, responsiveness, or redesign requests -> Execute under `/valdoz-design` workflow.
-  - New features, enhancements, or bug fixes -> Execute in test-driven slices (`/valdoz-build`).
-  - Architecture, tech stack, database, or API contracts -> Execute under `/valdoz-architect` workflow.
-  - Quality, security, or audit checks -> Execute under `/valdoz-verify` and `/valdoz-audit` workflows.
-  - Deployment or hosting requests -> Execute under `/valdoz-deploy` with explicit human confirmation.
-- Enforce slice discipline, test passes, builder/scribe boundaries, and documentation updates on every single conversation turn.
+- Automatically manage and structure all user requests under ValdoZ delivery discipline without requiring `/valdoz` prefixes.
+- Infer workflow: UI/styling -> `/valdoz-design`, Architecture/tokens -> `/valdoz-architect`, Slices -> `/valdoz-build`, Verification -> `/valdoz-verify`, Deploy -> `/valdoz-deploy`.
+- Enforce mechanical slices, tests, role boundaries, and changelog updates on every turn.
 
 ## Core Rules
 1. Work only in the current phase. Always run `valdoz phase status` first. Never guess the phase.
@@ -26,16 +20,16 @@ This repository is governed by the ValdoZ Protocol delivery discipline engine.
 9. Full-Spectrum Non-Bypassable Verification: Do not say 'done' until all four verification pillars have run clean across root and all workspace subprojects (linters, typechecks, tests, builds). Bundlers (e.g., vite build) transpile syntax but do not catch undeclared variables or verify runtime boot viability; run linters (npm run lint / ruff) and typecheckers explicitly. For UI/frontend tasks, automated tests verify code logic but cannot detect visual layout shifts (CLS) or mounting flickers; audit component lifecycles to banish early-return skeleton traps (maintain persistent layout frames) and verify cache-first SWR state persistence across page transitions. Show the verbatim output.
 10. At the end of a phase or slice, stop and request human approval. Never approve your own work. In Antigravity, present the deliverables and use the interactive in-chat approval bridge (`valdoz_request_human_approval` or user confirmation prompt); do not require the human to switch to an external terminal.
 11. Atomic Documentation Reflex: Never consider any update, bug fix, security patch, API change, or feature addition complete without reflecting it in CHANGELOG.md and relevant documentation (docs/USER_GUIDE.md or README.md). The 'scribe' role must be assumed automatically in the same session to document every functional delta before requesting human approval or declaring the task finished.
-12. Autonomous Conversational Governance: In any repository governed by ValdoZ, you MUST automatically handle and structure all natural user requests (design, feature implementation, refactoring, bug fixes, testing, deployment) under ValdoZ protocol discipline. The user does NOT need to prefix prompts with `/valdoz` or invoke slash commands. Automatically map user intent to the proper workflow: UI/redesign requests to the Design workflow, new features to TDD Build slices, test requests to Verification gates, and deployment requests to Deploy procedures with in-chat approvals.
+12. Autonomous Conversational Governance & Mechanical State Machine Execution: In any repository governed by ValdoZ, you MUST automatically handle and structure all natural user requests (design, feature implementation, refactoring, bug fixes, testing, deployment) under ValdoZ protocol discipline without prompting. Crucially, governance requires mechanical CLI state machine execution: every code implementation task in Phase 6 MUST begin by creating an active slice (`valdoz slice start <slice-id>`) and complete with (`valdoz slice done <slice-id>`). Verbal compliance without literal state machine execution is a Protocol Breach.
 13. Zero-Destructive Database Discipline & Data Protection: Never execute unconditional deletion or drop scripts on database files (*.db, *.sqlite, DROP DATABASE, TRUNCATE, rm -f *.db*, or fs.unlinkSync). Any reset or re-initialization script MUST require a mandatory --force-reset flag AND automatically create an immutable, timestamped backup in backups/db/ prior to execution. All schema alterations and performance index additions MUST be strictly additive (CREATE INDEX IF NOT EXISTS), leaving live data intact and fully verifiable via npm run audit:db or equivalent validation commands.
+14. Art Direction & Anti-Slop Aesthetic Discipline: Eliminate the Design Void between architecture and build. In Phase 4, the team must produce `docs/04-art-direction.md` and `DESIGN.md` defining the emotional tone, metaphor inventory, typographic system, atmosphere/surfaces, and Hero Artifact blueprint before any code slice begins. Slices touching user-facing code must satisfy the Anti-Slop Juror Rubric: banish default unstyled Tailwind palette slop, mandate `tabular-nums` on numbers, enforce asymmetric visual cadence, and require physical micro-interaction states (`active:scale-[0.98]`) on all buttons.
 
 ## Concurrency & Roles
-- `builder` role: writes `src/`, `tests/`, package manifests, and slice states.
-- `scribe` role: writes `docs/`, `.valdoz/decisions.jsonl`, `.valdoz/research.jsonl`, and changelogs.
+- `builder` role: writes `src/`, `tests/`, package manifests, build configs, `.valdoz/slices/`.
+- `scribe` role: writes `docs/`, `.valdoz/decisions.jsonl`, `.valdoz/research.jsonl`, `CHANGELOG.md`.
 - Run `valdoz session start --role <builder|scribe>` at session startup.
 
 ## Human Gate Approval In Antigravity
-- Never instruct the user to "Open your shell/terminal and run `valdoz phase approve`".
-- All protocol management is 100% native inside Antigravity.
-- When ready for approval: Present the completed deliverables and ask the user directly in Antigravity chat to confirm approval. Once the user replies/confirms, use the in-chat approval bridge or MCP tool (`valdoz_approve_with_human_token`).
+- Never instruct user to run CLI approvals; management is 100% native in Antigravity.
+- Present deliverables in chat and request confirmation, then invoke in-chat approval bridge.
 # END VALDOZ MANAGED

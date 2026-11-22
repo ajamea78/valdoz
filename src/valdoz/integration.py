@@ -58,7 +58,25 @@ elif [ "$ROLE" = "scribe" ]; then
     fi
 fi
 
-# 2. Gate and Audit Checks
+# 2. Phase 6 Slice Guard (The Dania Guard)
+# Prohibit staging src/ code during Phase 6 unless an active tracked slice exists in .valdoz/slices/
+if [ -f ".valdoz/state.json" ]; then
+    CURRENT_PHASE=$(grep -o '"current_phase":[0-9]*' .valdoz/state.json 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
+    if [ "$CURRENT_PHASE" = "6" ]; then
+        SRC_TOUCHED=$(echo "$STAGED_FILES" | grep -E '^src/' || true)
+        if [ -n "$SRC_TOUCHED" ]; then
+            ACTIVE_SLICES=$(find .valdoz/slices -name "*.json" 2>/dev/null | wc -l || true)
+            if [ -z "$ACTIVE_SLICES" ] || [ "$ACTIVE_SLICES" -eq 0 ]; then
+                echo "[ValdoZ Slice Protection Error] Code changes in 'src/' detected during Phase 6 without an active slice!"
+                echo "You MUST execute 'valdoz slice start <slice-id>' before writing or committing code."
+                echo "Refer to .valdoz/slices/ and ensure a formal slice is tracked."
+                exit 1
+            fi
+        fi
+    fi
+fi
+
+# 3. Gate and Audit Checks
 if [ -f ".valdoz/state.json" ] && command -v valdoz >/dev/null 2>&1; then
     valdoz gate check --ci
     valdoz audit --strict --no-network

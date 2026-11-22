@@ -46,6 +46,20 @@ REQUIRED_HEADINGS: Dict[str, Dict[str, List[str]]] = {
         "en": ["Milestones", "Slice Breakdown", "Dependencies"],
         "ar": ["المعالم الرئيسية", "تقسيم الشرائح", "التبعيات"],
     },
+    "04-art-direction.md": {
+        "en": [
+            "Metaphor & Subject Inventory",
+            "Typographic System",
+            "Atmosphere & Surface Rules",
+            "Hero Artifact Blueprint",
+        ],
+        "ar": [
+            "المجاز ومستودع الموضوع",
+            "النظام الطباعي",
+            "قواعد الأجواء والأسطح",
+            "مخطط الأثر البصري الرئيسي",
+        ],
+    },
     "07-verification.md": {
         "en": ["Test Results", "Security Checklist", "Performance Budget", "Acceptance Walkthrough"],
         "ar": ["نتائج الاختبارات", "قائمة فحص الأمان", "ميزانية الأداء", "جولة القبول"],

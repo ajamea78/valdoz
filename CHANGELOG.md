@@ -5,6 +5,30 @@ All notable changes to the ValdoZ Protocol delivery discipline engine will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-11-22
+
+### Added
+- **Art Direction (Phase 4.5) & DESIGN.md Token Registry Codification**:
+  - Closed "The Design Void" between architecture and build by expanding Phase 4 to **Architecture & Art Direction** (`src/valdoz/phases.py`, `src/valdoz/state.py`).
+  - Required deliverables before any implementation slice: `docs/04-art-direction.md` and `DESIGN.md` in addition to `docs/04-architecture.md` and `docs/04-plan.md`.
+  - Enforced required bilingual headings in `src/valdoz/gates.py`:
+    - English: *Metaphor & Subject Inventory*, *Typographic System*, *Atmosphere & Surface Rules*, *Hero Artifact Blueprint*.
+    - Arabic: *المجاز ومستودع الموضوع*, *النظام الطباعي*, *قواعد الأجواء والأسطح*, *مخطط الأثر البصري الرئيسي*.
+- **Anti-Slop Juror Gate (`anti-slop-gate`) (`src/valdoz/checks.py`, `src/valdoz/packs.py`, `src/valdoz/slices.py`)**:
+  - Implemented `scan_anti_slop_juror` registered in `BUILTIN_PACKS["web-app"]` and `BUILTIN_PACKS["website"]`.
+  - Rejects default unstyled Tailwind palette colors (`bg-blue-500`, `text-gray-400`, etc.), mandating semantic tokens from `DESIGN.md`.
+  - Mandates `tabular-nums` formatting for all numeric and currency metrics.
+  - Mandates physical tactile feedback micro-interactions (`active:scale-[0.98]`) on all button elements.
+  - Integrated into `valdoz slice done` to mechanically reject non-compliant frontend slices before reaching `gated` status.
+- **The Dania Guard: Mechanical Slice Integrity Enforcement & Directive 12 Hardening**:
+  - Hardened Directive 12 across `AGENTS.md`, `GEMINI.md`, and `.agent/rules/00-core-discipline.md` to mandate literal CLI state machine execution (`valdoz slice start`, `valdoz slice done`). Verbal compliance without literal execution is classified as a protocol breach.
+  - Hardened Git pre-commit hook in `src/valdoz/integration.py` to mechanically prohibit staging or committing code in `src/` during Phase 6 unless an active tracked slice exists in `.valdoz/slices/`.
+  - Implemented `scan_slice_integrity` check registered in `BUILTIN_PACKS["base"]`.
+- **Enacted Directive 14: Art Direction & Anti-Slop Aesthetic Discipline**:
+  - Codified Directive 14 across `src/valdoz/sync.py`, `AGENTS.md`, `GEMINI.md`, and `.agent/rules/00-core-discipline.md`.
+  - Generated dedicated modular rule `.agent/rules/05-art-direction.md`.
+  - Updated playbooks `valdoz-design`, `valdoz-architect`, `valdoz-build`, and `valdoz-verify`.
+
 ## [3.4.0] - 2026-11-11
 
 ### Added

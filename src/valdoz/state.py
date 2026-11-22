@@ -32,7 +32,7 @@ PHASE_NAMES: Dict[int, str] = {
     1: "Intake",
     2: "Requirements",
     3: "Stack Decision",
-    4: "Architecture and Plan",
+    4: "Architecture & Art Direction",
     5: "Project Setup",
     6: "Build",
     7: "Verify",

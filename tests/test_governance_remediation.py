@@ -190,6 +190,8 @@ def test_time_locked_phase_enforcement(tmp_path: Path):
     docs.mkdir(parents=True, exist_ok=True)
     (docs / "04-architecture.md").write_text("# Architecture\nDetailed plan.\n")
     (docs / "04-plan.md").write_text("# Plan\nMilestones.\n")
+    (docs / "04-art-direction.md").write_text("# Art Direction\nVisual tokens.\n")
+    (tmp_path / "DESIGN.md").write_text("# Design\nTokens.\n")
 
     # Configure 10-minute time-lock for Phase 4
     valdozrc = tmp_path / ".valdozrc.json"

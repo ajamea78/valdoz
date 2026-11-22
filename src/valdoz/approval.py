@@ -422,9 +422,15 @@ def approve_phase(
 
     # Verify confirmation input if provided
     expected_name = phase_name.lower().replace(" ", "-")
+    valid_names = {expected_name, str(target_num)}
+    if "&" in expected_name:
+        valid_names.add(expected_name.replace("&", "and").replace("--", "-"))
+    if target_num == 4:
+        valid_names.add("architecture-and-plan")
+
     if confirmation_input is not None:
         typed = confirmation_input.strip().lower().replace(" ", "-")
-        if typed != expected_name and typed != str(target_num):
+        if typed not in valid_names:
             raise ApprovalError(
                 f"Approval aborted: confirmation string '{confirmation_input}' did not match phase '{expected_name}'."
             )
